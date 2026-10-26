@@ -51,6 +51,27 @@ export function LessonPage() {
   const ready = lesson.status === 'ready';
   const progress = <PreparationProgress stage={stage} checks={checks} planned={Boolean(plan)} />;
 
+  // As soon as the lesson is planned, the learner starts thinking while the experiment is built and checked.
+  if (plan && lesson.status !== 'failed') {
+    return (
+      <LessonView
+        plan={plan}
+        html={ready ? lesson.html : undefined}
+        verification={lesson.verification}
+        language={learner?.language ?? 'en'}
+        preparation={progress}
+        outcome={outcome}
+        counter={lesson.counter}
+        onPredict={onPredict}
+        onTourComplete={onTourComplete}
+        onUnderstanding={onUnderstanding}
+        learner={learner}
+        realExperiment={lesson.realExperiment}
+        onRealResult={onRealResult}
+      />
+    );
+  }
+
   return (
     <Screen header={<BackButton to="/" />}>
       {lesson.status === 'failed' ? (
@@ -61,23 +82,6 @@ export function LessonPage() {
           </div>
           <Button onClick={retry}>{t('lesson.retry')}</Button>
         </div>
-      ) : plan ? (
-        // As soon as the lesson is planned, the learner starts thinking while the experiment is built and checked.
-        <LessonView
-          plan={plan}
-          html={ready ? lesson.html : undefined}
-          verification={lesson.verification}
-          language={learner?.language ?? 'en'}
-          preparation={progress}
-          outcome={outcome}
-          counter={lesson.counter}
-          onPredict={onPredict}
-          onTourComplete={onTourComplete}
-          onUnderstanding={onUnderstanding}
-          learner={learner}
-          realExperiment={lesson.realExperiment}
-          onRealResult={onRealResult}
-        />
       ) : (
         <div className="flex flex-1 flex-col justify-center gap-10 py-10">
           <div className="flex flex-col gap-3">
