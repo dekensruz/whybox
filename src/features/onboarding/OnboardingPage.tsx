@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@/app/SessionProvider';
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import type { Profile } from '@/features/profile/types';
@@ -100,6 +101,7 @@ export function OnboardingPage() {
             >
               <div className="h-full rounded-full bg-ink transition-[width] duration-300" style={{ width: `${((index + 1) / questionCount) * 100}%` }} />
             </div>
+            <LanguageSwitch />
           </div>
         )
       }

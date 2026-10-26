@@ -14,6 +14,7 @@ import {
   type DeviceUsage,
   type Level,
 } from '@/features/profile/types';
+import { countryName } from '@/features/profile/countryName';
 import { useI18n, type MessageKey } from '@/i18n';
 import type { Draft, StepId } from './steps';
 
@@ -217,9 +218,8 @@ export function StepContent({ step, draft, update }: StepContentProps) {
 
 function CountrySelect({ value, onChange, language }: { value: string; onChange: (code: string) => void; language: string }) {
   const { t } = useI18n();
-  const names = new Intl.DisplayNames([language], { type: 'region' });
   const sortByName = (codes: string[]) =>
-    codes.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, language));
+    codes.map((code) => ({ code, name: countryName(code, language) })).sort((a, b) => a.name.localeCompare(b.name, language));
   const featured = sortByName(FEATURED_COUNTRIES);
   const others = sortByName(COUNTRIES.filter((code) => !FEATURED_COUNTRIES.includes(code)));
 
