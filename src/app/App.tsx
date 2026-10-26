@@ -4,6 +4,8 @@ import { LogoMark } from '@/components/Logo';
 import { AuthPage } from '@/features/auth/AuthPage';
 import { WelcomePage } from '@/features/auth/WelcomePage';
 import { HomePage } from '@/features/home/HomePage';
+import { LessonPage } from '@/features/lesson/LessonPage';
+import { NewLessonPage } from '@/features/lesson/NewLessonPage';
 import { OnboardingPage } from '@/features/onboarding/OnboardingPage';
 import { useSession } from './SessionProvider';
 
@@ -38,6 +40,8 @@ export function App() {
         <Route path="/auth" element={<Gate stage="signed-out"><AuthPage /></Gate>} />
         <Route path="/onboarding" element={<Gate stage="onboarding"><OnboardingPage /></Gate>} />
         <Route path="/" element={<Gate stage="ready"><HomePage /></Gate>} />
+        <Route path="/lesson/new/:mode" element={<Gate stage="ready"><NewLessonPage /></Gate>} />
+        <Route path="/lesson/:id" element={<Gate stage="ready"><LessonPage /></Gate>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
