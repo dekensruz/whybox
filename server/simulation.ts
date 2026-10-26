@@ -6,7 +6,10 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
 - The scene tells the story at a glance and fills its frame: no large empty areas, nothing squeezed into a corner.
 - Real proportions and real physics. If something must be exaggerated to be visible, say so in the caption.
 - Show cause and effect with motion: when a value changes, the scene visibly reacts (particles speed up, an object sinks, a ray bends).
-- At most 6 short labels. Draw only what serves the idea. Flat, clean shapes, consistent strokes, no decoration, no emojis.
+- At most 5 labels of 1 to 3 words each. Never write equations, calculations, sentences or numbers with their
+  explanation inside the scene: the measurements already appear in the result cards below the scene.
+- Leave free space around objects so labels have room. Never draw text boxes or panels inside the scene.
+- Draw only what serves the idea. Flat, clean shapes, consistent strokes, no decoration, no emojis.
 - Use the kit colors (g.colors). The accent color marks the one thing that matters most.`;
 
 /** The 2D scene kit as the model sees it. The kit itself lives in src/features/lesson/runtime/kit. */
