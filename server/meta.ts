@@ -5,7 +5,10 @@ export type InputPart = { type: 'input_text'; text: string } | { type: 'input_im
 export type Effort = 'minimal' | 'low' | 'medium' | 'high';
 
 export const MODELS = {
+  /** Writes and edits lessons. */
   generation: () => process.env.GENERATION_MODEL || 'muse-spark-1.3',
+  /** Builds and repairs the interactive experiments, the hardest and most visible part. */
+  simulation: () => process.env.SIMULATION_MODEL || 'muse-wonder-1.0',
 };
 
 export class ModelError extends Error {

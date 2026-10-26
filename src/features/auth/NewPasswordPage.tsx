@@ -4,7 +4,7 @@ import { useSession } from '@/app/SessionProvider';
 import { Logo } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
-import { TextField } from '@/components/ui/Field';
+import { PasswordField } from '@/components/ui/PasswordField';
 import { useI18n } from '@/i18n';
 import { EmailAuthError, MIN_PASSWORD_LENGTH, setNewPassword, type AuthErrorKind } from './emailAuth';
 import { ErrorMessage } from './ErrorMessage';
@@ -15,6 +15,7 @@ export function NewPasswordPage() {
   const navigate = useNavigate();
   const { loading, mode } = useSession();
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthErrorKind | null>(null);
 
@@ -38,21 +39,36 @@ export function NewPasswordPage() {
     <Screen header={<Logo />}>
       <form onSubmit={submit} className="flex flex-1 flex-col justify-center gap-8 py-8">
         <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{t('auth.newPassword.title')}</h1>
-        <div className="flex flex-col gap-2">
-          <TextField
-            label={t('auth.newPassword.label')}
-            type="password"
-            required
-            minLength={MIN_PASSWORD_LENGTH}
-            autoComplete="new-password"
-            autoFocus
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          <p className="text-sm text-subtle">{t('auth.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
+            <PasswordField
+              label={t('auth.newPassword.label')}
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              autoComplete="new-password"
+              autoFocus
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            <p className="text-sm text-subtle">{t('auth.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            <PasswordField
+              label={t('auth.confirmPasswordLabel')}
+              required
+              autoComplete="new-password"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+            {confirmation.length >= password.length && confirmation.length > 0 && confirmation !== password && (
+              <p role="alert" className="text-sm text-danger">
+                {t('auth.passwordMismatch')}
+              </p>
+            )}
+          </div>
         </div>
         <ErrorMessage kind={error} />
-        <Button block type="submit" disabled={busy || password.length < MIN_PASSWORD_LENGTH}>
+        <Button block type="submit" disabled={busy || password.length < MIN_PASSWORD_LENGTH || confirmation !== password}>
           {t('auth.newPassword.submit')}
         </Button>
       </form>

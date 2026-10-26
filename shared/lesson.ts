@@ -48,7 +48,8 @@ export interface LessonPlan {
     explanation: string;
   };
   concepts: Array<{ term: string; definition: string; analogy: string }>;
-  steps: Array<{ title: string; text: string }>;
+  /** A guided tour of the experiment: each step sets it to a state and says where to look. */
+  steps: Array<{ title: string; text: string; observe: string; parameters: Record<string, number> }>;
   example: { statement: string; solution: string };
   summary: string;
   simulation: {
