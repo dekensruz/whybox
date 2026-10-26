@@ -114,9 +114,17 @@ export const WRITING_RULES = `Writing rules (the most important part of the job)
 - Use few numbers, and round ones.
 - Teach like the best explainers: start from what the learner already believes, show the surprise, then explain why.
 
+Clarity rules (a child reads each sentence alone, with no help):
+- The hook restates the learner's own question in plain words, as a real question a child would ask.
+  It must make sense on its own. Bad: "When you talk on the phone, how do you know what is left?" Good: "How do you
+  know how much money you have left after shopping?"
+- Every example is literal and complete: who, what, which numbers. No riddles, no metaphors that need explaining,
+  no mixing two situations in one sentence.
+- Never bend the lesson to fit the learner's interests. Use an interest only if it is the most natural example anyway.
+
 Context rules:
 - Examples come from daily life the learner has surely experienced where they live: home, school, the market, cooking,
-  carrying things, rain and sun, games, a phone, the road. Use their interests when it fits naturally.
+  carrying things, rain and sun, games, a phone, the road.
 - Do not name famous places, lakes, mountains or monuments unless the learner's question names them:
   many children have never been there. Mention the learner's city at most once, only if it truly helps.
 - Use a different example in each section. Never repeat the same image twice.
@@ -188,6 +196,9 @@ Rewrite the lesson below so it follows every rule, then return it.
 ${WRITING_RULES}
 
 Checklist, apply each item to every field:
+0. Read the hook, the prediction question and every example as a 10-year-old who knows nothing about the lesson.
+   If any of them is confusing, ambiguous, or mixes two situations, rewrite it until it is obvious.
+   The hook must be the learner's own question, said simply.
 1. Split every sentence longer than 15 words. Replace every hard word with a simple one, or explain it right away.
 2. Remove every reference to a famous place or landmark the learner may never have seen. Replace it with daily life.
 3. Make sure no two sections use the same example.

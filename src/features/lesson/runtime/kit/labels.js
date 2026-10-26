@@ -5,6 +5,8 @@ import { COLORS } from './core.js';
 const FONT = '600 12px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const HEIGHT = 20;
 const DISTANCES = [10, 22, 36, 52, 70];
+const MAX_LABELS = 5;
+const MAX_CHARS = 26;
 
 const overlap = (a, b) => {
   const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
@@ -16,32 +18,35 @@ const overlap = (a, b) => {
  * labels: [{ text, ax, ay, color, priority }] in screen pixels; obstacles: [{ x, y, w, h }] to avoid if possible.
  * Draws every label on `context`.
  */
-export function drawLabels(context, labels, obstacles, width, height) {
+export function drawLabels(context, allLabels, obstacles, width, height) {
   context.font = FONT;
   const placed = [];
-  labels
+  // A clear scene has few, short labels: keep the most important ones and shorten long texts.
+  const labels = allLabels
     .map((label, index) => Object.assign(label, { index }))
     .sort((a, b) => b.priority - a.priority || a.index - b.index)
-    .forEach((label) => {
-      const w = context.measureText(label.text).width + 10;
-      let best = null;
-      DISTANCES.forEach((d) => {
-        const offsets = [
-          [d, -d - HEIGHT], [d, d], [-d - w, -d - HEIGHT], [-d - w, d],
-          [-w / 2, -d - HEIGHT], [-w / 2, d], [d, -HEIGHT / 2], [-d - w, -HEIGHT / 2],
-        ];
-        offsets.forEach(([dx, dy], rank) => {
-          const box = { x: label.ax + dx, y: label.ay + dy, w, h: HEIGHT };
-          let score = d * 0.6 + rank * 0.1;
-          if (box.x < 2 || box.y < 2 || box.x + w > width - 2 || box.y + HEIGHT > height - 2) score += 10000;
-          placed.forEach((other) => (score += overlap(box, other) * 20));
-          obstacles.forEach((other) => (score += overlap(box, other) * 0.5));
-          if (!best || score < best.score) best = { box, score };
-        });
+    .slice(0, MAX_LABELS)
+    .map((label) => Object.assign(label, { text: label.text.length > MAX_CHARS ? `${label.text.slice(0, MAX_CHARS - 1).trim()}…` : label.text }));
+  labels.forEach((label) => {
+    const w = context.measureText(label.text).width + 10;
+    let best = null;
+    DISTANCES.forEach((d) => {
+      const offsets = [
+        [d, -d - HEIGHT], [d, d], [-d - w, -d - HEIGHT], [-d - w, d],
+        [-w / 2, -d - HEIGHT], [-w / 2, d], [d, -HEIGHT / 2], [-d - w, -HEIGHT / 2],
+      ];
+      offsets.forEach(([dx, dy], rank) => {
+        const box = { x: label.ax + dx, y: label.ay + dy, w, h: HEIGHT };
+        let score = d * 0.6 + rank * 0.1;
+        if (box.x < 2 || box.y < 2 || box.x + w > width - 2 || box.y + HEIGHT > height - 2) score += 10000;
+        placed.forEach((other) => (score += overlap(box, other) * 20));
+        obstacles.forEach((other) => (score += overlap(box, other) * 0.5));
+        if (!best || score < best.score) best = { box, score };
       });
-      placed.push(best.box);
-      label.box = best.box;
     });
+    placed.push(best.box);
+    label.box = best.box;
+  });
 
   labels.forEach((label) => {
     const { box } = label;
