@@ -1,7 +1,10 @@
 // Minimal client for the Meta Model API (Responses API).
 import type { Usage } from '../shared/lesson.js';
 
-export type InputPart = { type: 'input_text'; text: string } | { type: 'input_image'; image_url: string };
+export type InputPart =
+  | { type: 'input_text'; text: string }
+  | { type: 'input_image'; image_url: string }
+  | { type: 'input_video'; video_url: string };
 export type Effort = 'minimal' | 'low' | 'medium' | 'high';
 
 export const MODELS = {
@@ -9,6 +12,8 @@ export const MODELS = {
   generation: () => process.env.GENERATION_MODEL || 'muse-spark-1.3',
   /** Builds and repairs the interactive experiments, the hardest and most visible part. */
   simulation: () => process.env.SIMULATION_MODEL || 'muse-wonder-1.0',
+  /** Finds and tracks objects in the learners' videos of real experiments. */
+  segmentation: () => process.env.SEGMENTATION_MODEL || 'sam-3.1',
 };
 
 export class ModelError extends Error {
@@ -32,10 +37,12 @@ export const callModel = async ({
   model,
   parts,
   effort,
+  metadata,
 }: {
   model: string;
   parts: InputPart[];
   effort?: Effort;
+  metadata?: Record<string, string>;
 }): Promise<{ text: string; usage: Usage }> => {
   const apiKey = process.env.MODEL_API_KEY;
   if (!apiKey) throw new ModelError('MODEL_API_KEY is not configured', 500);
@@ -48,6 +55,7 @@ export const callModel = async ({
       model,
       input: [{ type: 'message', role: 'user', content: parts }],
       ...(effort && { reasoning: { effort } }),
+      ...(metadata && { metadata }),
     }),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   }).catch((error: Error) => {

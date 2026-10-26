@@ -1,4 +1,4 @@
-import type { CheckFailure, LearnerContext, LessonPlan } from '@shared/lesson';
+import type { CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
 import type { Profile } from '@/features/profile/types';
 
 export class ApiError extends Error {
@@ -36,6 +36,32 @@ export const requestSimulation = (
   learner: LearnerContext,
   repair?: { html: string; failures: CheckFailure[]; visualIssues?: string[] },
 ) => post<{ html: string }>('/api/lessons/simulation', { plan, learner, repair }).then((result) => result.html);
+
+export const requestCounterTour = (plan: LessonPlan, learner: LearnerContext, idea: string) =>
+  post<{ tour: CounterTour }>('/api/lessons/counter', { plan, learner, idea }).then((result) => result.tour);
+
+/** Uploads the learner's video straight to private storage, then has it tracked and analysed. */
+export const analyseRealExperiment = async (
+  plan: LessonPlan,
+  learner: LearnerContext,
+  video: File,
+  durationSeconds: number,
+  objectSizeCm: number,
+  onStage: (stage: 'uploading' | 'tracking') => void,
+) => {
+  onStage('uploading');
+  const { path, uploadUrl } = await post<{ path: string; uploadUrl: string }>('/api/experiments/upload', { contentType: video.type });
+  const upload = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': video.type }, body: video });
+  if (!upload.ok) throw new ApiError(upload.status);
+  onStage('tracking');
+  return post<{ result: RealExperimentResult; found: boolean }>('/api/experiments/analyze', {
+    path,
+    plan,
+    learner,
+    durationSeconds,
+    objectSizeCm,
+  });
+};
 
 export const requestVisualReview = (plan: LessonPlan, snapshots: string[]) =>
   post<{ approved: boolean; issues: string[] }>('/api/lessons/review', { plan, snapshots });

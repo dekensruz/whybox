@@ -1,5 +1,7 @@
 // Generated experiments run in a sandboxed iframe (scripts only, no access to the app).
 // A small bridge script lets the app call their window.whybox test interface through postMessage.
+import type { LessonPlan } from '@shared/lesson';
+import { withRuntime } from './runtime';
 
 // The frame grows to fit its content, so viewport-relative heights (100vh) must not feed back into it.
 const BRIDGE = `<style>html,body{height:auto!important;min-height:0!important}</style><script>
@@ -11,12 +13,15 @@ const BRIDGE = `<style>html,body{height:auto!important;min-height:0!important}</
 // Renders the page as a JPEG: the DOM goes through an SVG foreignObject, canvases are copied as images.
 function whyboxSnapshot() {
   return new Promise(function (resolve, reject) {
+    // Experiments built with the scene kit can paint on demand, even while animations are paused.
+    if (window.WB && window.WB.renderNow) window.WB.renderNow();
     var root = document.documentElement;
-    var width = root.scrollWidth, height = Math.min(root.scrollHeight, 1400);
+    // The content's own height, not the frame's: no empty band below short experiments.
+    var width = root.scrollWidth, height = Math.min(Math.ceil(document.body.getBoundingClientRect().bottom), 1400);
     // A frame that is not laid out (hidden page) would give a blank picture.
     if (!width || !height) return reject(new Error('nothing to capture'));
     // Same for a canvas never painted, when the browser paused animations (minimized window).
-    var blank = Array.prototype.some.call(document.querySelectorAll('canvas'), function (canvas) {
+    var blank = Array.prototype.some.call(document.querySelectorAll('canvas:not([data-whybox-overlay])'), function (canvas) {
       var context = canvas.width && canvas.height && canvas.getContext('2d');
       if (!context) return false;
       var pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -32,8 +37,13 @@ function whyboxSnapshot() {
     var canvases = document.querySelectorAll('canvas'), copies = clone.querySelectorAll('canvas');
     for (var i = 0; i < canvases.length; i++) {
       var image = document.createElement('img');
-      image.src = canvases[i].toDataURL();
-      image.setAttribute('style', 'display:block;width:' + canvases[i].clientWidth + 'px;height:' + canvases[i].clientHeight + 'px');
+      // JPEG keeps the copy small (and the capture fast); overlays need transparency, so they stay PNG.
+      image.src = canvases[i].hasAttribute('data-whybox-overlay') ? canvases[i].toDataURL() : canvases[i].toDataURL('image/jpeg', 0.85);
+      // Keep the canvas's classes and position, so overlays (labels over a 3D scene) stay where they are.
+      image.setAttribute('class', canvases[i].getAttribute('class') || '');
+      var placement = getComputedStyle(canvases[i]);
+      image.setAttribute('style', 'display:block;width:' + canvases[i].clientWidth + 'px;height:' + canvases[i].clientHeight + 'px;position:'
+        + placement.position + ';top:' + placement.top + ';left:' + placement.left);
       copies[i].parentNode.replaceChild(image, copies[i]);
     }
     clone.querySelectorAll('script').forEach(function (script) { script.remove(); });
@@ -74,7 +84,11 @@ window.addEventListener('message', function (event) {
 
 /** Adds the bridge to a generated experiment. */
 export const withBridge = (html: string) =>
-  /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${BRIDGE}</body>`) : `${html}${BRIDGE}`;
+  /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, () => `${BRIDGE}</body>`) : `${html}${BRIDGE}`;
+
+/** The document actually loaded in the sandbox: runtime first, the experiment, then the bridge. */
+export const prepareExperiment = async (html: string, plan: LessonPlan, language: string) =>
+  withBridge(await withRuntime(html, plan, language));
 
 export class SimulationBridge {
   private nextId = 0;
