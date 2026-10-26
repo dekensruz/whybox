@@ -1,4 +1,4 @@
-import { ModelError } from './meta';
+import { ModelError } from './meta.js';
 
 export class BadRequest extends Error {}
 

@@ -1,6 +1,6 @@
 // Step 2 of a lesson: build the interactive experiment, and repair it when verification fails.
-import type { CheckFailure, LearnerContext, LessonPlan } from '../shared/lesson';
-import type { InputPart } from './meta';
+import type { CheckFailure, LearnerContext, LessonPlan } from '../shared/lesson.js';
+import type { InputPart } from './meta.js';
 
 const DESIGN_RULES = `Design (very professional, simple and minimalist):
 - Background #FAFAF7, text #14161A, secondary text #5B6270, lines #E6E4DE, one accent color #F2A900 for what matters most.

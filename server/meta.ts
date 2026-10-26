@@ -1,5 +1,5 @@
 // Minimal client for the Meta Model API (Responses API).
-import type { Usage } from '../shared/lesson';
+import type { Usage } from '../shared/lesson.js';
 
 export type InputPart = { type: 'input_text'; text: string } | { type: 'input_image'; image_url: string };
 export type Effort = 'minimal' | 'low' | 'medium' | 'high';

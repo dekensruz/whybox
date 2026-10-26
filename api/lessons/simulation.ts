@@ -1,7 +1,7 @@
-import type { CheckFailure, LearnerContext, LessonPlan } from '../../shared/lesson';
-import { BadRequest, handle, json, readBody } from '../../server/http';
-import { callModel, MODELS } from '../../server/meta';
-import { buildRepairParts, buildSimulationParts, extractHtml } from '../../server/simulation';
+import type { CheckFailure, LearnerContext, LessonPlan } from '../../shared/lesson.js';
+import { BadRequest, handle, json, readBody } from '../../server/http.js';
+import { callModel, MODELS } from '../../server/meta.js';
+import { buildRepairParts, buildSimulationParts, extractHtml } from '../../server/simulation.js';
 
 interface SimulationRequest {
   plan: LessonPlan;

@@ -1,7 +1,7 @@
-import type { LessonRequest } from '../../shared/lesson';
-import { handle, json, readBody } from '../../server/http';
-import { buildPlanParts, parsePlan, validateLessonRequest } from '../../server/lessonPlan';
-import { callModel, MODELS, ModelError } from '../../server/meta';
+import type { LessonRequest } from '../../shared/lesson.js';
+import { handle, json, readBody } from '../../server/http.js';
+import { buildPlanParts, parsePlan, validateLessonRequest } from '../../server/lessonPlan.js';
+import { callModel, MODELS, ModelError } from '../../server/meta.js';
 
 const ATTEMPTS = 2;
 

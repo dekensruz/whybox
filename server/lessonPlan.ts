@@ -1,8 +1,8 @@
 // Step 1 of a lesson: understand what the learner asks and plan a personalized lesson.
-import { evaluate } from '../shared/expression';
-import type { LearnerContext, LessonPlan, LessonRequest } from '../shared/lesson';
-import { BadRequest } from './http';
-import type { InputPart } from './meta';
+import { evaluate } from '../shared/expression.js';
+import type { LearnerContext, LessonPlan, LessonRequest } from '../shared/lesson.js';
+import { BadRequest } from './http.js';
+import type { InputPart } from './meta.js';
 
 const LEVEL_DESCRIPTIONS: Record<string, string> = {
   primary: 'upper primary school (ages 10 to 12)',
