@@ -23,7 +23,7 @@ export function WelcomePage() {
           <Button block onClick={() => navigate('/auth')}>
             {t('welcome.start')}
           </Button>
-          <Button block variant="ghost" onClick={() => navigate('/auth')}>
+          <Button block variant="ghost" onClick={() => navigate('/auth?mode=signin')}>
             {t('welcome.haveAccount')}
           </Button>
         </div>

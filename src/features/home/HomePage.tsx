@@ -1,12 +1,15 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useSession } from '@/app/SessionProvider';
 import { Logo } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
+import { listLessons } from '@/features/lesson/lessonStore';
 import { useI18n } from '@/i18n';
 
 export function HomePage() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { profile, signOut } = useSession();
+  const [lessons] = useState(listLessons);
 
   return (
     <Screen
@@ -26,23 +29,39 @@ export function HomePage() {
         </div>
 
         <div className="grid gap-3">
-          <ActionCard title={t('home.photo')} hint={t('home.photoHint')} icon={<CameraIcon />} />
-          <ActionCard title={t('home.question')} hint={t('home.questionHint')} icon={<QuestionIcon />} />
+          <ActionCard title={t('home.photo')} hint={t('home.photoHint')} icon={<CameraIcon />} to="/lesson/new/photo" />
+          <ActionCard title={t('home.question')} hint={t('home.questionHint')} icon={<QuestionIcon />} to="/lesson/new/question" />
         </div>
 
         <section className="flex flex-col gap-4">
           <h2 className="text-sm font-medium text-muted">{t('home.recent')}</h2>
-          <p className="rounded-2xl border border-dashed border-line px-5 py-8 text-center text-sm text-subtle">{t('home.empty')}</p>
+          {lessons.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-line px-5 py-8 text-center text-sm text-subtle">{t('home.empty')}</p>
+          ) : (
+            <ul className="flex flex-col divide-y divide-line rounded-2xl border border-line bg-surface">
+              {lessons.map((lesson) => (
+                <li key={lesson.id}>
+                  <Link to={`/lesson/${lesson.id}`} className="flex flex-col gap-0.5 px-5 py-4 transition-colors hover:bg-paper">
+                    <span className="font-medium">{lesson.plan?.title ?? lesson.question ?? t('lesson.newLesson')}</span>
+                    <span className="text-sm text-muted">
+                      {new Date(lesson.createdAt).toLocaleDateString(language, { day: 'numeric', month: 'long' })}
+                      {lesson.status !== 'ready' && ` · ${t(lesson.status === 'failed' ? 'lesson.retry' : 'lesson.stages.building')}`}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </Screen>
   );
 }
 
-function ActionCard({ title, hint, icon }: { title: string; hint: string; icon: ReactNode }) {
+function ActionCard({ title, hint, icon, to }: { title: string; hint: string; icon: ReactNode; to: string }) {
   return (
-    <button
-      type="button"
+    <Link
+      to={to}
       className="flex items-center gap-4 rounded-2xl border border-line bg-surface px-5 py-5 text-left transition-colors hover:border-ink/30"
     >
       <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-paper text-ink">{icon}</span>
@@ -53,7 +72,7 @@ function ActionCard({ title, hint, icon }: { title: string; hint: string; icon: 
       <svg viewBox="0 0 20 20" className="size-5 text-subtle" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
         <path d="m7.5 4.5 5.5 5.5-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-    </button>
+    </Link>
   );
 }
 

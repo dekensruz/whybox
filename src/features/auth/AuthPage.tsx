@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '@/app/SessionProvider';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Logo } from '@/components/Logo';
@@ -7,52 +7,131 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
 import { useI18n } from '@/i18n';
+import { CodeForm } from './CodeForm';
+import { ErrorMessage } from './ErrorMessage';
+import {
+  EmailAuthError,
+  MIN_PASSWORD_LENGTH,
+  resendCode,
+  sendResetCode,
+  signIn,
+  signUp,
+  type AuthErrorKind,
+  type CodePurpose,
+} from './emailAuth';
 
-type Status = 'idle' | 'sending' | 'sent' | 'error';
+type View = 'signup' | 'signin' | 'forgot' | { code: CodePurpose };
 
 export function AuthPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { onlineSignInAvailable, signInWithGoogle, signInWithEmail, continueAsGuest } = useSession();
+  const [params] = useSearchParams();
+  const { onlineSignInAvailable, signInWithGoogle, continueAsGuest } = useSession();
+  const [view, setView] = useState<View>(params.get('mode') === 'signin' ? 'signin' : 'signup');
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<Status>('idle');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<AuthErrorKind | null>(null);
 
-  const handleGoogle = () => signInWithGoogle().catch(() => setStatus('error'));
+  const show = (next: View) => {
+    setError(null);
+    setView(next);
+  };
 
-  const handleEmail = async (event: FormEvent) => {
-    event.preventDefault();
-    setStatus('sending');
+  /** Runs an auth action, turning failures into a message. */
+  const attempt = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
     try {
-      await signInWithEmail(email.trim());
-      setStatus('sent');
-    } catch {
-      setStatus('error');
+      await action();
+    } catch (caught) {
+      setError(caught instanceof EmailAuthError ? caught.kind : 'unknown');
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleGuest = () => {
+  const submitCredentials = (event: FormEvent) => {
+    event.preventDefault();
+    const address = email.trim();
+    if (view === 'signup') {
+      return attempt(async () => {
+        await signUp(address, password);
+        show({ code: 'signup' });
+      });
+    }
+    return attempt(async () => {
+      try {
+        await signIn(address, password);
+      } catch (caught) {
+        // An unconfirmed account gets a fresh code and goes to the code screen.
+        if (!(caught instanceof EmailAuthError) || caught.kind !== 'email-not-confirmed') throw caught;
+        await resendCode(address, 'signup');
+        show({ code: 'signup' });
+      }
+    });
+  };
+
+  const submitReset = (event: FormEvent) => {
+    event.preventDefault();
+    return attempt(async () => {
+      await sendResetCode(email.trim());
+      show({ code: 'recovery' });
+    });
+  };
+
+  const continueWithoutAccount = () => {
     continueAsGuest();
     navigate('/onboarding');
   };
 
-  return (
-    <Screen
-      header={
-        <>
-          <Logo />
-          <LanguageSwitch />
-        </>
-      }
-    >
-      <div className="flex flex-1 flex-col justify-center gap-8 py-8">
-        <div className="flex flex-col gap-3">
-          <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{t('auth.title')}</h1>
-          <p className="leading-relaxed text-muted">{t('auth.subtitle')}</p>
-        </div>
+  const header = (
+    <>
+      <Logo />
+      <LanguageSwitch />
+    </>
+  );
 
+  if (typeof view === 'object') {
+    return (
+      <Screen header={header}>
+        <CodeForm
+          email={email.trim()}
+          purpose={view.code}
+          onVerified={() => view.code === 'recovery' && navigate('/password', { replace: true })}
+          onChangeEmail={() => show(view.code === 'signup' ? 'signup' : 'forgot')}
+        />
+      </Screen>
+    );
+  }
+
+  if (view === 'forgot') {
+    return (
+      <Screen header={header}>
+        <Intro title={t('auth.reset.title')} subtitle={t('auth.reset.hint')}>
+          <form onSubmit={submitReset} className="flex flex-col gap-4">
+            <EmailField value={email} onChange={setEmail} />
+            <ErrorMessage kind={error} />
+            <Button block type="submit" disabled={busy}>
+              {t('auth.reset.submit')}
+            </Button>
+          </form>
+          <Button variant="ghost" onClick={() => show('signin')}>
+            {t('auth.reset.back')}
+          </Button>
+        </Intro>
+      </Screen>
+    );
+  }
+
+  const isSignUp = view === 'signup';
+
+  return (
+    <Screen header={header}>
+      <Intro title={isSignUp ? t('auth.signUpTitle') : t('auth.signInTitle')} subtitle={t('auth.subtitle')}>
         {onlineSignInAvailable ? (
           <div className="flex flex-col gap-5">
-            <Button block variant="secondary" onClick={handleGoogle}>
+            <Button block variant="secondary" onClick={() => attempt(signInWithGoogle)}>
               <GoogleIcon />
               {t('auth.google')}
             </Button>
@@ -63,45 +142,75 @@ export function AuthPage() {
               <span className="h-px flex-1 bg-line" />
             </div>
 
-            {status === 'sent' ? (
-              <p role="status" className="rounded-xl bg-accent-soft px-4 py-3 text-sm leading-relaxed">
-                {t('auth.emailSent')}
-              </p>
-            ) : (
-              <form onSubmit={handleEmail} className="flex flex-col gap-3">
+            <form onSubmit={submitCredentials} className="flex flex-col gap-4">
+              <EmailField value={email} onChange={setEmail} />
+              <div className="flex flex-col gap-2">
                 <TextField
-                  label={t('auth.emailLabel')}
-                  type="email"
+                  label={t('auth.passwordLabel')}
+                  type="password"
                   required
-                  autoComplete="email"
-                  placeholder={t('auth.emailPlaceholder')}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  minLength={isSignUp ? MIN_PASSWORD_LENGTH : undefined}
+                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
-                <Button block type="submit" disabled={status === 'sending'}>
-                  {t('auth.emailSubmit')}
-                </Button>
-              </form>
-            )}
+                {isSignUp ? (
+                  <p className="text-sm text-subtle">{t('auth.passwordHint', { min: MIN_PASSWORD_LENGTH })}</p>
+                ) : (
+                  <button type="button" onClick={() => show('forgot')} className="self-end text-sm text-muted hover:text-ink">
+                    {t('auth.forgot')}
+                  </button>
+                )}
+              </div>
+              <ErrorMessage kind={error} />
+              <Button block type="submit" disabled={busy}>
+                {isSignUp ? t('auth.signUpSubmit') : t('auth.signInSubmit')}
+              </Button>
+            </form>
 
-            {status === 'error' && (
-              <p role="alert" className="text-sm text-danger">
-                {t('auth.error')}
-              </p>
-            )}
+            <Button variant="ghost" onClick={() => show(isSignUp ? 'signin' : 'signup')}>
+              {isSignUp ? t('auth.toSignIn') : t('auth.toSignUp')}
+            </Button>
           </div>
         ) : (
           <p className="rounded-xl border border-line px-4 py-3 text-sm leading-relaxed text-muted">{t('auth.unavailable')}</p>
         )}
 
-        <div className="flex flex-col items-center gap-1">
-          <Button variant="ghost" onClick={handleGuest}>
+        <div className="flex flex-col items-center gap-1 border-t border-line pt-6">
+          <Button variant="ghost" onClick={continueWithoutAccount}>
             {t('auth.guest')}
           </Button>
           <span className="text-xs text-subtle">{t('auth.guestHint')}</span>
         </div>
-      </div>
+      </Intro>
     </Screen>
+  );
+}
+
+function Intro({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-1 flex-col justify-center gap-8 py-8">
+      <div className="flex flex-col gap-3">
+        <h1 className="text-[28px] font-semibold leading-tight tracking-tight">{title}</h1>
+        <p className="leading-relaxed text-muted text-pretty">{subtitle}</p>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmailField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useI18n();
+  return (
+    <TextField
+      label={t('auth.emailLabel')}
+      type="email"
+      required
+      autoComplete="email"
+      placeholder={t('auth.emailPlaceholder')}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
 

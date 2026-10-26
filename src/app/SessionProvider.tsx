@@ -16,7 +16,6 @@ interface SessionValue {
   profile: Profile | null;
   onlineSignInAvailable: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<void>;
   continueAsGuest: () => void;
   updateProfile: (profile: Profile) => Promise<void>;
   signOut: () => Promise<void>;
@@ -73,15 +72,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, [redirectTo]);
 
-  const signInWithEmail = useCallback(
-    async (email: string) => {
-      if (!supabase) throw new Error('Supabase is not configured');
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
-      if (error) throw error;
-    },
-    [redirectTo],
-  );
-
   const continueAsGuest = useCallback(() => {
     writeStorage(GUEST_KEY, '1');
     setIsGuest(true);
@@ -111,12 +101,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       profile,
       onlineSignInAvailable: Boolean(supabase),
       signInWithGoogle,
-      signInWithEmail,
       continueAsGuest,
       updateProfile,
       signOut,
     }),
-    [authReady, profileOwner, sessionKey, mode, user, profile, signInWithGoogle, signInWithEmail, continueAsGuest, updateProfile, signOut],
+    [authReady, profileOwner, sessionKey, mode, user, profile, signInWithGoogle, continueAsGuest, updateProfile, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
