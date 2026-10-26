@@ -6,6 +6,8 @@ export interface Verification {
   passed: number;
   total: number;
   repairs: number;
+  /** Outcome of the review of the experiment's pictures by Muse Wonder. */
+  visualReview?: 'approved' | 'fixed' | 'skipped';
 }
 
 export interface Lesson {

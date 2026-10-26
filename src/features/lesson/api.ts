@@ -31,5 +31,11 @@ export const learnerFromProfile = (profile: Profile): LearnerContext => ({
 export const requestPlan = (learner: LearnerContext, input: { question?: string; image?: string }) =>
   post<{ plan: LessonPlan }>('/api/lessons/plan', { learner, ...input }).then((result) => result.plan);
 
-export const requestSimulation = (plan: LessonPlan, learner: LearnerContext, repair?: { html: string; failures: CheckFailure[] }) =>
-  post<{ html: string }>('/api/lessons/simulation', { plan, learner, repair }).then((result) => result.html);
+export const requestSimulation = (
+  plan: LessonPlan,
+  learner: LearnerContext,
+  repair?: { html: string; failures: CheckFailure[]; visualIssues?: string[] },
+) => post<{ html: string }>('/api/lessons/simulation', { plan, learner, repair }).then((result) => result.html);
+
+export const requestVisualReview = (plan: LessonPlan, snapshots: string[]) =>
+  post<{ approved: boolean; issues: string[] }>('/api/lessons/review', { plan, snapshots });

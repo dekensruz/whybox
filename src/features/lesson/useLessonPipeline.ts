@@ -1,15 +1,17 @@
-// Runs a lesson through its stages: plan, build the experiment, verify it (and repair it if needed).
-// Progress is saved after each stage, so a lesson resumes where it stopped.
+// Runs a lesson through its stages: plan, build the experiment, verify its calculations,
+// review it visually, and repair it when needed. Progress is saved after each stage,
+// so a lesson resumes where it stopped.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LearnerContext } from '@shared/lesson';
-import { requestPlan, requestSimulation } from './api';
+import { requestPlan, requestSimulation, requestVisualReview } from './api';
 import { getLesson, saveLesson } from './lessonStore';
-import type { Lesson } from './types';
+import type { Lesson, Verification } from './types';
 import { verifySimulation } from './verifySimulation';
 
-const MAX_REPAIRS = 2;
+const MAX_CALCULATION_REPAIRS = 2;
+const MAX_VISUAL_REPAIRS = 1;
 
-export type PipelineStage = 'planning' | 'building' | 'verifying' | 'repairing';
+export type PipelineStage = 'planning' | 'building' | 'verifying' | 'reviewing' | 'repairing';
 
 export function useLessonPipeline(lessonId: string, learner: LearnerContext | null) {
   const [lesson, setLesson] = useState<Lesson | null>(() => getLesson(lessonId));
@@ -42,20 +44,49 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
         current = commit({ ...current, html, status: 'verifying' });
       }
 
-      setStage('verifying');
-      let result = await verifySimulation(plan, html);
-      setChecks(result);
-      let repairs = 0;
-      while (result.failures.length > 0 && repairs < MAX_REPAIRS) {
-        repairs++;
+      const verify = async () => {
+        setStage('verifying');
+        const result = await verifySimulation(plan, html!);
+        setChecks(result);
+        return result;
+      };
+
+      let result = await verify();
+      let calculationRepairs = 0;
+      while (result.failures.length > 0 && calculationRepairs < MAX_CALCULATION_REPAIRS) {
+        calculationRepairs++;
         setStage('repairing');
         html = await requestSimulation(plan, learner, { html, failures: result.failures });
-        setStage('verifying');
-        result = await verifySimulation(plan, html);
+        result = await verify();
+      }
+
+      let visualReview: Verification['visualReview'] = 'skipped';
+      let visualRepairs = 0;
+      while (result.failures.length === 0 && result.snapshots.length > 0) {
+        setStage('reviewing');
+        const review = await requestVisualReview(plan, result.snapshots).catch(() => ({ approved: true, issues: [] }));
+        if (review.approved) {
+          visualReview = visualRepairs > 0 ? 'fixed' : 'approved';
+          break;
+        }
+        if (visualRepairs >= MAX_VISUAL_REPAIRS) break;
+        visualRepairs++;
+        setStage('repairing');
+        const repaired = await requestSimulation(plan, learner, { html, failures: [], visualIssues: review.issues });
+        const repairedResult = await verifySimulation(plan, repaired);
+        // A visual fix is kept only if it does not break any calculation.
+        if (repairedResult.failures.length > 0) break;
+        html = repaired;
+        result = repairedResult;
         setChecks(result);
       }
 
-      commit({ ...current, html, status: 'ready', verification: { passed: result.passed, total: result.total, repairs } });
+      commit({
+        ...current,
+        html,
+        status: 'ready',
+        verification: { passed: result.passed, total: result.total, repairs: calculationRepairs + visualRepairs, visualReview },
+      });
     } catch (error) {
       console.error(error);
       if (current) commit({ ...current, status: 'failed' });
