@@ -1,23 +1,34 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { SimulationBridge, withBridge } from './simulationBridge';
+import { useEffect, useRef, useState } from 'react';
+import type { LessonPlan } from '@shared/lesson';
+import { prepareExperiment, SimulationBridge } from './simulationBridge';
 
 const MIN_HEIGHT = 420;
 const MAX_HEIGHT = 1400;
 
 interface SimulationFrameProps {
   html: string;
-  title: string;
+  plan: LessonPlan;
+  language: string;
   /** Parameter values the experiment is driven to, e.g. by the current step of the guided tour. */
   state?: Record<string, number>;
 }
 
 /** Displays a generated experiment in a sandbox that can run scripts but cannot reach the app. */
-export function SimulationFrame({ html, title, state }: SimulationFrameProps) {
+export function SimulationFrame({ html, plan, language, state }: SimulationFrameProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const bridge = useRef<SimulationBridge | null>(null);
   const [height, setHeight] = useState(640);
   const [loaded, setLoaded] = useState(false);
-  const source = useMemo(() => withBridge(html), [html]);
+  const [source, setSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoaded(false);
+    prepareExperiment(html, plan, language).then((prepared) => !cancelled && setSource(prepared));
+    return () => {
+      cancelled = true;
+    };
+  }, [html, plan, language]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -55,10 +66,10 @@ export function SimulationFrame({ html, title, state }: SimulationFrameProps) {
   return (
     <iframe
       ref={frame}
-      title={title}
+      title={plan.title}
       sandbox="allow-scripts"
-      srcDoc={source}
-      onLoad={() => setLoaded(true)}
+      srcDoc={source ?? ''}
+      onLoad={() => source && setLoaded(true)}
       style={{ height }}
       className="w-full rounded-2xl border border-line bg-paper"
     />

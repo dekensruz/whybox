@@ -2,7 +2,7 @@
 // every measurement with the formula of the lesson, before a learner ever sees it.
 import { evaluate } from '@shared/expression';
 import type { CheckFailure, LessonPlan } from '@shared/lesson';
-import { SimulationBridge, withBridge } from './simulationBridge';
+import { prepareExperiment, SimulationBridge } from './simulationBridge';
 
 const RELATIVE_TOLERANCE = 0.02;
 const RANDOM_CASES = 3;
@@ -45,7 +45,7 @@ const matches = (expected: number, received: unknown) =>
   Math.abs(received - expected) <= Math.max(1e-6, RELATIVE_TOLERANCE * Math.abs(expected));
 
 /** Loads the experiment in an invisible sandboxed frame and runs every check. */
-export const verifySimulation = async (plan: LessonPlan, html: string): Promise<VerificationResult> => {
+export const verifySimulation = async (plan: LessonPlan, html: string, language: string): Promise<VerificationResult> => {
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('aria-hidden', 'true');
@@ -53,7 +53,7 @@ export const verifySimulation = async (plan: LessonPlan, html: string): Promise<
   frame.style.cssText = 'position:fixed;left:0;top:0;width:380px;height:900px;border:0;opacity:0;pointer-events:none;z-index:-1;';
   const bridge = new SimulationBridge(frame);
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
-  frame.srcdoc = withBridge(html);
+  frame.srcdoc = await prepareExperiment(html, plan, language);
   document.body.appendChild(frame);
 
   const failures: CheckFailure[] = [];
@@ -102,7 +102,7 @@ const captureTour = async (plan: LessonPlan, bridge: SimulationBridge): Promise<
     for (const state of states) {
       for (const [name, value] of Object.entries(state)) await bridge.call('set', [name, value]);
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-      snapshots.push(await bridge.call<string>('snapshot', [], 8000));
+      snapshots.push(await bridge.call<string>('snapshot', [], 15000));
     }
   } catch {
     // Some browsers cannot take the pictures: the visual review is then skipped.

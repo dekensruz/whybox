@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LearnerContext } from '@shared/lesson';
 import { requestPlan, requestSimulation, requestVisualReview } from './api';
-import { getLesson, saveLesson } from './lessonStore';
+import { buildLearnerMemory } from './learnerMemory';
+import { getLesson, listLessons, saveLesson } from './lessonStore';
 import type { Lesson, Verification } from './types';
 import { verifySimulation } from './verifySimulation';
 
@@ -19,34 +20,42 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
   const [checks, setChecks] = useState<{ passed: number; total: number } | null>(null);
   const running = useRef(false);
 
-  const commit = (next: Lesson) => {
-    saveLesson(next);
-    setLesson(next);
-    return next;
-  };
+  // Changes are merged into the stored lesson, so the pipeline and the learner's answers never overwrite each other.
+  const commit = useCallback(
+    (patch: Partial<Lesson>) => {
+      const latest = getLesson(lessonId);
+      if (!latest) return null;
+      const next = { ...latest, ...patch };
+      saveLesson(next);
+      setLesson(next);
+      return next;
+    },
+    [lessonId],
+  );
 
   const run = useCallback(async () => {
-    let current = getLesson(lessonId);
+    const current = getLesson(lessonId);
     if (!current || !learner || running.current || current.status === 'ready') return;
     running.current = true;
     try {
-      if (!current.plan) {
+      let plan = current.plan;
+      if (!plan) {
         setStage('planning');
-        const plan = await requestPlan(learner, { question: current.question, image: current.image });
-        current = commit({ ...current, plan, status: 'building' });
+        const memory = buildLearnerMemory(listLessons(), lessonId);
+        plan = await requestPlan({ ...learner, memory }, { question: current.question, image: current.image });
+        commit({ plan, status: 'building' });
       }
-      const plan = current.plan!;
 
       let html = current.html;
       if (!html) {
         setStage('building');
         html = await requestSimulation(plan, learner);
-        current = commit({ ...current, html, status: 'verifying' });
+        commit({ html, status: 'verifying' });
       }
 
       const verify = async () => {
         setStage('verifying');
-        const result = await verifySimulation(plan, html!);
+        const result = await verifySimulation(plan, html!, learner.language);
         setChecks(result);
         return result;
       };
@@ -69,11 +78,14 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
           visualReview = visualRepairs > 0 ? 'fixed' : 'approved';
           break;
         }
-        if (visualRepairs >= MAX_VISUAL_REPAIRS) break;
+        if (visualRepairs >= MAX_VISUAL_REPAIRS) {
+          visualReview = visualRepairs > 0 ? 'improved' : 'skipped';
+          break;
+        }
         visualRepairs++;
         setStage('repairing');
         const repaired = await requestSimulation(plan, learner, { html, failures: [], visualIssues: review.issues });
-        const repairedResult = await verifySimulation(plan, repaired);
+        const repairedResult = await verifySimulation(plan, repaired, learner.language);
         // A visual fix is kept only if it does not break any calculation.
         if (repairedResult.failures.length > 0) break;
         html = repaired;
@@ -82,19 +94,18 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
       }
 
       commit({
-        ...current,
         html,
         status: 'ready',
         verification: { passed: result.passed, total: result.total, repairs: calculationRepairs + visualRepairs, visualReview },
       });
     } catch (error) {
       console.error(error);
-      if (current) commit({ ...current, status: 'failed' });
+      commit({ status: 'failed' });
     } finally {
       running.current = false;
       setStage(null);
     }
-  }, [lessonId, learner]);
+  }, [lessonId, learner, commit]);
 
   useEffect(() => {
     // Starts or resumes the lesson; a failed lesson waits for `retry`.
@@ -103,9 +114,9 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
 
   const retry = useCallback(() => {
     const current = getLesson(lessonId);
-    if (current) commit({ ...current, status: current.plan ? (current.html ? 'verifying' : 'building') : 'planning' });
+    if (current) commit({ status: current.plan ? (current.html ? 'verifying' : 'building') : 'planning' });
     void run();
-  }, [lessonId, run]);
+  }, [lessonId, run, commit]);
 
-  return { lesson, stage, checks, retry };
+  return { lesson, stage, checks, retry, update: commit };
 }

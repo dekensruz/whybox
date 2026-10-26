@@ -1,6 +1,6 @@
 // Step 1 of a lesson: understand what the learner asks and plan a personalized lesson.
 import { evaluate } from '../shared/expression.js';
-import type { LearnerContext, LessonPlan, LessonRequest } from '../shared/lesson.js';
+import type { CounterTour, HomeExperiment, LearnerContext, LearnerMemory, LessonPlan, LessonRequest, TourStep } from '../shared/lesson.js';
 import { BadRequest } from './http.js';
 import type { InputPart } from './meta.js';
 
@@ -26,6 +26,33 @@ const languageName = (code: string) => {
   }
 };
 
+const ADAPT_INSTRUCTIONS: Record<LearnerMemory['adapt'], string> = {
+  simpler: 'Recent lessons were hard for this learner: use even simpler words, more comparisons, and smaller steps.',
+  same: 'Keep the usual depth.',
+  deeper: 'This learner understands quickly: you may add one more precise idea or a slightly harder example.',
+};
+
+const describeMemory = (memory: LearnerMemory | undefined) => {
+  if (!memory || (memory.recentLessons.length === 0 && memory.wrongIdeas.length === 0)) return '';
+  const lessons = memory.recentLessons
+    .map((lesson) => {
+      const prediction = lesson.predictionCorrect === null ? '' : lesson.predictionCorrect ? ', predicted right' : ', predicted wrong';
+      const understanding = lesson.understanding ? `, said they understood: ${lesson.understanding}` : '';
+      return `  - ${lesson.title} (${lesson.subject}${prediction}${understanding})`;
+    })
+    .join('\n');
+  return [
+    '',
+    'What Whybox knows from this learner\'s previous lessons:',
+    lessons && `- Recent lessons:\n${lessons}`,
+    memory.wrongIdeas.length > 0 && `- Wrong ideas they recently had: ${memory.wrongIdeas.map((idea) => `"${idea}"`).join('; ')}`,
+    `- ${ADAPT_INSTRUCTIONS[memory.adapt]}`,
+    '- When it truly helps, connect to a previous lesson in one short sentence. If a past wrong idea is related, address it.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
+
 export const describeLearner = (learner: LearnerContext) =>
   [
     `- Role: ${learner.role}`,
@@ -39,6 +66,7 @@ export const describeLearner = (learner: LearnerContext) =>
         learner.deviceUsage
       ]
     }`,
+    describeMemory(learner.memory),
   ].join('\n');
 
 export const PLAN_SHAPE = `{
@@ -60,7 +88,17 @@ export const PLAN_SHAPE = `{
   }],
   "example": { "statement": "a small problem with simple round numbers and local currency or objects", "solution": "solved in short numbered lines" },
   "summary": "one short sentence that is true on its own",
+  "homeExperiment": {
+    "title": "short title",
+    "materials": ["common household objects only"],
+    "steps": ["short numbered actions, including how to hold the phone still and film for 3 to 8 seconds"],
+    "target": "short English noun phrase naming the ONE object to track, e.g. \\"orange ball\\", \\"bottle cap\\"",
+    "targetSizeCm": 6,
+    "motion": "fall | swing | roll | float | other",
+    "prediction": "what the learner should see, and what the lesson's law predicts, with a number when possible"
+  },
   "simulation": {
+    "dimension": "2d or 3d",
     "description": "what the interactive experiment shows, including what is normally invisible",
     "parameters": [{ "name": "camelCaseId", "label": "...", "unit": "...", "min": 0, "max": 10, "default": 5, "step": 0.5 }],
     "measurements": [{ "name": "camelCaseId", "label": "...", "unit": "...", "formula": "arithmetic of parameter names" }]
@@ -111,9 +149,17 @@ Lesson rules:
 - The steps are a guided tour of the experiment: each step sets the experiment to a state (its "parameters")
   that makes one idea visible, then says where to look. The first step starts from the most familiar situation.
 - The experiment has 2 to 4 parameters and 1 to 3 measurements.
+- "homeExperiment": a real experiment the learner can do at home in 2 minutes and film, where ONE clearly visible
+  object moves in a way that shows the lesson's law (a ball that falls or rolls, a pendulum made of string, an object
+  that floats). Only safe, cheap, common objects: no fire, no mains electricity, no sharp tools, no chemicals.
+  The phone stays still, the object stands out from the background. Use null if no such experiment fits the lesson.
+- "dimension": choose "3d" only when depth, rotation or a spatial view is essential to understand the idea
+  (the Earth, the Moon and the Sun, seasons, day and night, molecules and crystals, fields around a magnet,
+  volumes and solids, light in space). Choose "2d" for everything else: circuits, graphs, forces on a plane, most math.
 - Each measurement formula is a plain arithmetic expression using only parameter names, numbers, + - * / ^, parentheses
   and sqrt, abs, sin, cos, tan, exp, log, pow, min, max, pi. Angles in formulas are in radians.
   A switch is a parameter with min 0, max 1, step 1, and appears as a factor in the formulas.
+  Its label names the object ("Interrupteur"), never one of its states ("Interrupteur fermé").
 - Parameter ranges must be realistic and keep every measurement finite. Step values stay inside the ranges.
 
 Answer with JSON only, exactly this shape:
@@ -178,6 +224,86 @@ const shuffle = <T>(items: T[]): T[] => {
   return result;
 };
 
+const MOTIONS: HomeExperiment['motion'][] = ['fall', 'swing', 'roll', 'float', 'other'];
+
+/** Keeps a home experiment only if it is complete enough to be done and tracked. */
+const normalizeHomeExperiment = (experiment: HomeExperiment | null | undefined): HomeExperiment | null => {
+  if (!experiment || typeof experiment.target !== 'string' || !experiment.target.trim()) return null;
+  const strings = (list: unknown, max: number) =>
+    (Array.isArray(list) ? list : []).filter((item): item is string => typeof item === 'string').slice(0, max);
+  const size = Number(experiment.targetSizeCm);
+  const steps = strings(experiment.steps, 8);
+  if (steps.length === 0) return null;
+  return {
+    title: String(experiment.title ?? '').slice(0, 80),
+    materials: strings(experiment.materials, 8),
+    steps,
+    target: experiment.target.trim().slice(0, 60),
+    targetSizeCm: Number.isFinite(size) && size > 0 && size < 200 ? size : 5,
+    motion: MOTIONS.includes(experiment.motion) ? experiment.motion : 'other',
+    prediction: String(experiment.prediction ?? '').slice(0, 400),
+  };
+};
+
+/** Each step drives the experiment: keep only known parameters, clamped to their range. */
+const normalizeSteps = (steps: TourStep[], plan: LessonPlan): TourStep[] => {
+  const ranges = new Map(plan.simulation.parameters.map((parameter) => [parameter.name, parameter]));
+  return steps
+    .filter((step) => step && typeof step.title === 'string' && typeof step.text === 'string')
+    .map((step) => ({
+      title: step.title,
+      text: step.text,
+      observe: typeof step.observe === 'string' ? step.observe : '',
+      parameters: Object.fromEntries(
+        Object.entries(step.parameters ?? {})
+          .filter(([name, value]) => ranges.has(name) && Number.isFinite(Number(value)))
+          .map(([name, value]) => {
+            const { min, max } = ranges.get(name)!;
+            return [name, Math.min(max, Math.max(min, Number(value)))];
+          }),
+      ),
+    }));
+};
+
+/** A short guided tour, on the same experiment, designed to let the learner test their own wrong idea. */
+export const buildCounterParts = (plan: LessonPlan, idea: string, learner: LearnerContext): InputPart[] => [
+  {
+    type: 'input_text',
+    text: `You are Whybox. Before the lesson, the learner predicted something wrong.
+
+The learner:
+${describeLearner(learner)}
+
+The lesson: ${plan.title}. ${plan.hook}
+The learner's wrong idea: "${idea}"
+The right answer: "${plan.prediction.options[plan.prediction.answerIndex]}"
+
+The interactive experiment they will use:
+${plan.simulation.description}
+Parameters: ${plan.simulation.parameters.map((p) => `${p.name} (${p.label}, ${p.min} to ${p.max} ${p.unit})`).join('; ')}
+
+Design a short guided tour, 2 or 3 steps, that takes the learner's idea seriously and tests it on the experiment:
+first a situation where their idea seems to work or would predict something precise, then the situation that shows it fails,
+then what really decides. The learner must SEE the contradiction, not be told they are wrong.
+
+${WRITING_RULES}
+
+Write in ${languageName(learner.language)}. Warm and respectful: their idea is natural, many people have it.
+Answer with JSON only:
+{
+  "intro": "one or two short sentences that restate their idea kindly and invite them to test it",
+  "steps": [{ "title": "...", "text": "...", "observe": "where to look", "parameters": { "<parameter name>": <value> } }]
+}`,
+  },
+];
+
+export const parseCounter = (text: string, plan: LessonPlan, idea: string): CounterTour => {
+  const tour = extractJson(text) as Partial<CounterTour>;
+  const steps = normalizeSteps(Array.isArray(tour.steps) ? tour.steps : [], plan).slice(0, 4);
+  if (typeof tour.intro !== 'string' || steps.length === 0) throw new Error('Incomplete counter tour');
+  return { idea, intro: tour.intro, steps };
+};
+
 /** Parses the model's plan and rejects anything the app could not use safely. */
 export const parsePlan = (text: string): LessonPlan => {
   const plan = extractJson(text) as LessonPlan;
@@ -199,20 +325,9 @@ export const parsePlan = (text: string): LessonPlan => {
     if (!IDENTIFIER.test(measurement.name)) throw new Error(`Invalid measurement name "${measurement.name}"`);
     if (!Number.isFinite(evaluate(measurement.formula, defaults))) throw new Error(`Formula of ${measurement.name} is not finite`);
   }
-  // Each step drives the experiment: keep only known parameters, clamped to their range.
-  const ranges = new Map(simulation.parameters.map((parameter) => [parameter.name, parameter]));
-  plan.steps = plan.steps.map((step) => ({
-    ...step,
-    observe: step.observe ?? '',
-    parameters: Object.fromEntries(
-      Object.entries(step.parameters ?? {})
-        .filter(([name, value]) => ranges.has(name) && Number.isFinite(Number(value)))
-        .map(([name, value]) => {
-          const { min, max } = ranges.get(name)!;
-          return [name, Math.min(max, Math.max(min, Number(value)))];
-        }),
-    ),
-  }));
+  simulation.dimension = simulation.dimension === '3d' ? '3d' : '2d';
+  plan.homeExperiment = normalizeHomeExperiment(plan.homeExperiment);
+  plan.steps = normalizeSteps(plan.steps, plan);
 
   // Models tend to put the right answer first: shuffle so its position teaches nothing.
   const answerIndex = Math.min(Math.max(Number(plan.prediction.answerIndex) || 0, 0), plan.prediction.options.length - 1);
@@ -223,24 +338,43 @@ export const parsePlan = (text: string): LessonPlan => {
   return plan;
 };
 
+const text = (value: unknown, max: number) => String(value ?? '').slice(0, max);
+
+const sanitizeMemory = (memory: LearnerMemory | undefined): LearnerMemory | undefined => {
+  if (!memory || typeof memory !== 'object') return undefined;
+  const understandings = ['clear', 'partly', 'lost'];
+  return {
+    recentLessons: (Array.isArray(memory.recentLessons) ? memory.recentLessons : []).slice(0, 8).map((lesson) => ({
+      title: text(lesson?.title, 80),
+      subject: text(lesson?.subject, 40),
+      predictionCorrect: typeof lesson?.predictionCorrect === 'boolean' ? lesson.predictionCorrect : null,
+      understanding: understandings.includes(lesson?.understanding as string) ? lesson.understanding : null,
+    })),
+    wrongIdeas: (Array.isArray(memory.wrongIdeas) ? memory.wrongIdeas : []).slice(0, 5).map((idea) => text(idea, 160)),
+    adapt: memory.adapt === 'simpler' || memory.adapt === 'deeper' ? memory.adapt : 'same',
+  };
+};
+
+/** Keeps only well-formed, bounded learner data: it is written into prompts. */
+export const sanitizeLearner = (learner: LearnerContext | undefined): LearnerContext => {
+  if (!learner || typeof learner.language !== 'string' || typeof learner.country !== 'string') throw new BadRequest('Missing learner');
+  return {
+    role: learner.role === 'teacher' ? 'teacher' : 'student',
+    levels: (learner.levels ?? []).slice(0, 3).map(String),
+    country: learner.country.slice(0, 2),
+    city: text(learner.city, 60),
+    language: learner.language.slice(0, 10),
+    interests: (learner.interests ?? []).slice(0, 12).map((item) => text(item, 40)),
+    subjects: (learner.subjects ?? []).slice(0, 12).map((item) => text(item, 40)),
+    deviceUsage: ['own', 'shared', 'classroom'].includes(learner.deviceUsage) ? learner.deviceUsage : 'own',
+    memory: sanitizeMemory(learner.memory),
+  };
+};
+
 export const validateLessonRequest = (body: LessonRequest): LessonRequest => {
   const { learner, question, image } = body ?? {};
-  if (!learner || typeof learner.language !== 'string' || typeof learner.country !== 'string') throw new BadRequest('Missing learner');
   if (!question?.trim() && !image) throw new BadRequest('Provide a question or an image');
   if (question && question.length > 1000) throw new BadRequest('Question is too long');
   if (image && !/^data:image\/(jpeg|png|webp);base64,/.test(image)) throw new BadRequest('Unsupported image');
-  return {
-    learner: {
-      role: learner.role === 'teacher' ? 'teacher' : 'student',
-      levels: (learner.levels ?? []).slice(0, 3).map(String),
-      country: learner.country.slice(0, 2),
-      city: String(learner.city ?? '').slice(0, 60),
-      language: learner.language.slice(0, 10),
-      interests: (learner.interests ?? []).slice(0, 12).map((item) => String(item).slice(0, 40)),
-      subjects: (learner.subjects ?? []).slice(0, 12).map((item) => String(item).slice(0, 40)),
-      deviceUsage: ['own', 'shared', 'classroom'].includes(learner.deviceUsage) ? learner.deviceUsage : 'own',
-    },
-    question: question?.trim(),
-    image,
-  };
+  return { learner: sanitizeLearner(learner), question: question?.trim(), image };
 };
