@@ -50,14 +50,27 @@ many of them in schools with no lab and no textbook.
 From the lesson provided (text or photo of a notebook, blackboard or textbook page),
 create ONE interactive simulation that shows how the thing really works inside.
 
+Teaching style (like a great teacher who makes hard ideas obvious):
+- Open with one concrete question from everyday life that the simulation answers.
+- Explain step by step, in short plain sentences, each step tied to something visible on screen.
+- Define every term the first time it appears, with a concrete everyday comparison.
+- Give at least one worked example with real numbers and units.
+- End with a one-sentence summary of what the child should remember.
+- Calm, precise and respectful tone. No jargon left unexplained, no exclamation marks, no emojis.
+
+Design (very professional, simple and minimalist):
+- Light neutral background, dark text, one accent color, plenty of white space.
+- System font stack, clear hierarchy, no decorative clutter, no gradients, no cartoon style, no emojis.
+- Smooth, purposeful animation only where it helps understanding.
+
 Requirements:
 - A single self-contained HTML file. No external scripts, styles, fonts or images, no network calls.
 - Show what is normally invisible (moving electrons, forces, light rays, pressure...).
 - 2 to 4 controls (large sliders or buttons) that change the key parameters, with live values and units.
 - Display at least one measured value that changes with the controls.
 - The physics or math must be correct: compute values from the real formula of the lesson.
-- Mobile first: works on a 360px wide phone screen, touch friendly, smooth animation.
-- Clean, colorful, friendly design. All visible text in this language: ${lang}.
+- Mobile first: works on a 360px wide phone screen, touch friendly.
+- All visible text in this language: ${lang}.
 - Expose a test interface for automatic verification:
   window.whybox = {
     params: { <name>: { value, min, max, unit } },  // every control
