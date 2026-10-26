@@ -1,0 +1,31 @@
+@import '@fontsource-variable/inter';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-paper: #fafaf7;
+  --color-surface: #ffffff;
+  --color-ink: #14161a;
+  --color-muted: #5b6270;
+  --color-subtle: #8a909c;
+  --color-line: #e6e4de;
+  --color-accent: #f2a900;
+  --color-accent-soft: #fdf3d8;
+  --color-danger: #b42318;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ink;
+  }
+}
