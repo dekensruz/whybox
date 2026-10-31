@@ -14,7 +14,20 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
   explanation inside the scene: the measurements already appear in the result cards below the scene.
 - Leave free space around objects so labels have room. Never draw text boxes or panels inside the scene.
 - Draw only what serves the idea. Flat, clean shapes, consistent strokes, no decoration, no emojis.
+- Every shape is either a recognizable real object of the situation (use g.icon and g.items whenever one fits) or a
+  standard diagram element (bar on a common scale, arrow, ruler, path). Never invent a symbol: no ball on a string
+  standing for a price, no unexplained boxes, no circle that stands for nothing.
+- Abstract quantities become things a child can count or compare: items (breads, coins, people) or bars that share
+  one scale and start from the same left edge.
+- Lay the scene out on a clear grid: groups aligned, equal gaps, related things side by side, each label right next
+  to what it names.
 - Use the kit colors (g.colors). The accent color marks the one thing that matters most.`;
+
+/** Pictograms of the kit (src/features/lesson/runtime/kit/icons.js). */
+const ICON_LIST = [
+  'coin', 'banknote', 'bread', 'person', 'child', 'ball', 'stone', 'bottle', 'cup', 'bucket', 'water', 'house', 'tree',
+  'plant', 'sun', 'cloud', 'phone', 'battery', 'bulb', 'box', 'bag', 'book', 'car', 'bicycle', 'clock', 'pot', 'fish',
+].join(', ');
 
 /** The 2D scene kit as the model sees it. The kit itself lives in src/features/lesson/runtime/kit. */
 const KIT_GUIDE_2D = `The page, the controls, the live measurements, the test interface and the smooth transitions are already provided
@@ -45,6 +58,18 @@ Drawing helpers (all positions and sizes in world units; o is an optional option
   g.dimension(x1, y1, x2, y2, text, o)  a measured distance with its value
   g.glow(x, y, r, strength, o)   soft light around a lamp or the sun, strength 0 to 1, stays inside the scene
   g.highlight(x, y, r)           draws the learner's eye to one spot
+  g.icon(name, x, y, size, o)    a clean pictogram of an everyday object, centred on (x, y), size wide. Names:
+                                 ${ICON_LIST}
+                                 o: color, opacity, ghost (empty dashed outline: a missing item), crossed (struck out),
+                                 level (battery, 0 to 1), on (bulb), value (clock, 0 to 1)
+  g.items(name, count, x, y, w, h, o)  count icons neatly arranged in the box (x, y bottom-left, w, h), sized to fit.
+                                 o: total (draw the remaining slots as empty outlines), crossed (strike out the last n),
+                                 color. The way to show any countable quantity: breads bought, coins left, people, bottles.
+                                 Give the box room: at least 16 units tall and 10 units per item across, at most 10 slots.
+  g.bar(x, y, w, h, o)           a quantity as a bar (x, y bottom-left, w its length). o: full (length of the whole scale,
+                                 drawn as a light track), color, label (written just above the bar's left end).
+                                 Bars of one scene share one scale and the same x, stacked with gaps of at least 12 units.
+                                 Use it instead of g.rect plus g.label for any bar.
   g.label(text, x, y, o)         short label anchored at (x, y); the kit places it so labels never overlap, with a leader line.
                                  o: color, priority (higher is placed first)
   g.px(n)                        n screen pixels in world units (for fixed-size details)
@@ -65,6 +90,19 @@ WB.app({
     g.rect(43, 8, 14, 8, { fill: g.colors.ink, radius: 3 });
     g.label('Pile ' + p.voltage + ' V', 50, 12);
     g.label('Ampoule', 50, 50, { priority: 1 });
+  }
+});
+
+Example for a quantity lesson (money: price, number bought, money in the pocket):
+WB.app({
+  world: { width: 100, height: 70 },
+  draw(g, p, m, t) {
+    g.items('bread', p.count, 6, 44, 52, 20, { total: 6 });
+    g.items('coin', p.money / 100, 64, 44, 30, 20, { crossed: Math.min(p.money, m.cost) / 100 });
+    g.bar(6, 24, 88 * Math.min(1, p.money / 2000), 7, { full: 88, color: g.colors.positive, label: 'Argent en poche' });
+    g.bar(6, 6, 88 * Math.min(1, m.cost / 2000), 7, { full: 88, color: g.colors.accent, label: 'Coût total' });
+    g.label('Pains', 32, 64);
+    g.label('Pièces', 79, 64);
   }
 });`;
 
@@ -146,7 +184,13 @@ export const buildSimulationParts = (plan: LessonPlan, learner: LearnerContext):
 Lesson: ${plan.title}
 What the experiment shows: ${plan.simulation.description}
 The guided tour the lesson will play on it (the scene must make each of these visible):
-${plan.steps.map((step, index) => `  ${index + 1}. ${step.title}: ${JSON.stringify(step.parameters)}, the learner watches: ${step.observe}`).join('\n')}
+${plan.steps
+  .map(
+    (step, index) =>
+      `  ${index + 1}. ${step.title}: ${JSON.stringify(step.parameters)}, the learner watches: ${step.observe}` +
+      (step.challenge ? ` (the learner finds this state alone: "${step.challenge.question}")` : ''),
+  )
+  .join('\n')}
 
 ${interfaceSpec(plan)}
 
@@ -216,6 +260,9 @@ Reject the experiment if any of these is true:
 - Two consecutive pictures look almost the same although their values differ: the change must be obvious at a glance.
 - The proportions or the physics look wrong (an object where it cannot be, arrows in the wrong direction).
 - It looks cluttered, childish or unprofessional (decoration, emojis, inconsistent styles).
+- A shape stands for nothing a child would recognize (an abstract symbol, a ball on a string standing for a price),
+  or a quantity is shown in a way a child cannot count or compare.
+- A label sits far from what it names, its leader line crosses other shapes, or elements are misaligned.
 
 Answer with JSON only: { "approved": true or false, "issues": ["precise problem and how to fix it", ...] }
 List at most 6 issues, the most important first. If approved, issues is empty.`,
