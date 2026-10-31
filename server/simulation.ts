@@ -6,6 +6,10 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
 - The scene tells the story at a glance and fills its frame: no large empty areas, nothing squeezed into a corner.
 - Real proportions and real physics. If something must be exaggerated to be visible, say so in the caption.
 - Show cause and effect with motion: when a value changes, the scene visibly reacts (particles speed up, an object sinks, a ray bends).
+- Every parameter drives something big and visible, scaled so that its whole range spans a large part of the scene:
+  moving a slider from its minimum to its maximum must change the picture obviously, not by a few pixels.
+- Show the outcome, not only the process: if something moves over time, also draw where it ends up (a marker,
+  a trail, a ruler with the distance), so a still picture of each step is clearly different from the others.
 - At most 5 labels of 1 to 3 words each. Never write equations, calculations, sentences or numbers with their
   explanation inside the scene: the measurements already appear in the result cards below the scene.
 - Leave free space around objects so labels have room. Never draw text boxes or panels inside the scene.
@@ -209,6 +213,7 @@ Reject the experiment if any of these is true:
 - The scene is small, squeezed into a corner, or leaves large empty areas.
 - A child could not tell what is happening, or the key idea is not visible.
 - A step picture does not clearly show what that step says the learner should see.
+- Two consecutive pictures look almost the same although their values differ: the change must be obvious at a glance.
 - The proportions or the physics look wrong (an object where it cannot be, arrows in the wrong direction).
 - It looks cluttered, childish or unprofessional (decoration, emojis, inconsistent styles).
 

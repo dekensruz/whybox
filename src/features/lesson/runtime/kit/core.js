@@ -24,6 +24,8 @@ const STYLE = [
   `.wb-result{background:${COLORS.surface};border:1px solid ${COLORS.line};border-radius:14px;padding:10px 12px}`,
   `.wb-result span{display:block;font-size:12px;color:${COLORS.muted}}`,
   '.wb-result strong{display:block;font-size:22px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}',
+  `@keyframes wb-flash{0%{background:${COLORS.accentSoft};border-color:${COLORS.accent}}100%{background:${COLORS.surface};border-color:${COLORS.line}}}`,
+  '.wb-changed{animation:wb-flash 1.2s ease-out}',
   '.wb-controls{padding:4px 16px}',
   `.wb-control{padding:12px 0;border-bottom:1px solid ${COLORS.line}}`,
   '.wb-control:last-child{border-bottom:0}',
@@ -175,8 +177,18 @@ export function startExperiment(options, renderer) {
     });
     const measured = measureAt(targets);
     spec.measurements.forEach((m) => {
-      resultNodes[m.name].textContent = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
+      const text = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
+      const node = resultNodes[m.name];
+      // A result that changes lights up briefly, so the learner sees what the change did.
+      if (node.textContent && node.textContent !== text) {
+        node.parentNode.classList.remove('wb-changed');
+        void node.parentNode.offsetWidth;
+        node.parentNode.classList.add('wb-changed');
+      }
+      node.textContent = text;
     });
+    // The lesson around the experiment follows the values, e.g. to notice the learner left the current step.
+    if (window.parent !== window) parent.postMessage({ whyboxValues: { ...targets } }, '*');
   };
 
   function setTarget(name, value, animate) {

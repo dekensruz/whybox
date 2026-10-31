@@ -11,20 +11,31 @@ interface SimulationFrameProps {
   language: string;
   /** Parameter values the experiment is driven to, e.g. by the current step of the guided tour. */
   state?: Record<string, number>;
+  /** Called with the experiment's values whenever they change, including when the learner moves a control. */
+  onValues?: (values: Record<string, number>) => void;
 }
 
 /** Displays a generated experiment in a sandbox that can run scripts but cannot reach the app. */
-export function SimulationFrame({ html, plan, language, state }: SimulationFrameProps) {
+export function SimulationFrame({ html, plan, language, state, onValues }: SimulationFrameProps) {
+  const valuesListener = useRef(onValues);
+  valuesListener.current = onValues;
   const frame = useRef<HTMLIFrameElement>(null);
   const bridge = useRef<SimulationBridge | null>(null);
   const [height, setHeight] = useState(640);
   const [loaded, setLoaded] = useState(false);
   const [source, setSource] = useState<string | null>(null);
 
+  // The lesson object is replaced whenever the lesson saves something (a prediction, an answer): only a real
+  // change of content reloads the experiment. Otherwise the frame would wait forever for a load that never comes.
+  const loadedSource = useRef<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setLoaded(false);
-    prepareExperiment(html, plan, language).then((prepared) => !cancelled && setSource(prepared));
+    prepareExperiment(html, plan, language).then((prepared) => {
+      if (cancelled || prepared === loadedSource.current) return;
+      loadedSource.current = prepared;
+      setLoaded(false);
+      setSource(prepared);
+    });
     return () => {
       cancelled = true;
     };
@@ -33,8 +44,10 @@ export function SimulationFrame({ html, plan, language, state }: SimulationFrame
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
-      const reported = Number((event.data as { whyboxHeight?: number })?.whyboxHeight);
+      const data = event.data as { whyboxHeight?: number; whyboxValues?: Record<string, number> };
+      const reported = Number(data?.whyboxHeight);
       if (reported > 0) setHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, reported)));
+      if (data?.whyboxValues && typeof data.whyboxValues === 'object') valuesListener.current?.(data.whyboxValues);
     };
     window.addEventListener('message', onMessage);
     bridge.current = frame.current ? new SimulationBridge(frame.current) : null;
