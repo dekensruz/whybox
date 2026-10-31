@@ -1,8 +1,8 @@
 import type { CounterTour, LessonPlan, RealExperimentResult, Understanding } from '@shared/lesson';
 
-export type IllustrationKind = 'hook' | 'summary';
+export type IllustrationKind = 'hook' | 'summary' | 'exercise' | `concept${number}`;
 
-export type LessonStatus ='planning' | 'building' | 'verifying' | 'ready' | 'failed';
+export type LessonStatus = 'planning' | 'building' | 'verifying' | 'ready' | 'failed';
 
 export interface Verification {
   passed: number;

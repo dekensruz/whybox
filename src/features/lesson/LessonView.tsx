@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { challengeStart } from '@shared/challenge';
 import type { CounterTour, LearnerContext, LessonPlan, RealExperimentResult, TourStep, Understanding } from '@shared/lesson';
 import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
@@ -10,7 +11,7 @@ import { ExerciseCard, type ExerciseResult } from './ExerciseCard';
 import { MissionsPanel } from './MissionsPanel';
 import { RealExperiment } from './real/RealExperiment';
 import { SimulationFrame } from './SimulationFrame';
-import type { LessonOutcome, Verification } from './types';
+import type { IllustrationKind, LessonOutcome, Verification } from './types';
 
 const UNDERSTANDINGS: Array<{ value: Understanding; key: 'lesson.understandingClear' | 'lesson.understandingPartly' | 'lesson.understandingLost' }> = [
   { value: 'clear', key: 'lesson.understandingClear' },
@@ -40,7 +41,7 @@ interface LessonViewProps {
   onRealResult: (result: RealExperimentResult & { objectSizeCm: number }) => void;
   onExercise: (result: ExerciseResult) => void;
   /** Object URLs of the lesson's Muse Image illustrations, when they are ready. */
-  illustrations: { hook?: string; summary?: string };
+  illustrations: Partial<Record<IllustrationKind, string>>;
 }
 
 /** An illustration that fades in when it arrives, keeping its place so the card does not jump. */
@@ -134,9 +135,34 @@ export function LessonView(props: LessonViewProps) {
     window.clearTimeout(settle.current);
     settle.current = window.setTimeout(() => setLiveValues(values), 400);
   }, []);
+
+  // A challenge step is not shown: the learner finds its state alone, starting from the previous step's state,
+  // and reads the explanation only once found. "Show me" applies the step's own state instead.
+  const [solved, setSolved] = useState<Record<number, 'found' | 'shown'>>({});
+  const challenge = step.challenge;
+  const challengeOpen = slide.kind === 'step' && Boolean(challenge) && !solved[slide.index];
+  const startState = useMemo(
+    () => challengeStart(defaults, tourIndex > 0 ? tour[tourIndex - 1].parameters : {}, step.parameters, step.challenge?.find ?? []),
+    [defaults, tour, tourIndex, step],
+  );
+  const onChallenge = useRef<number | null>(null);
+  onChallenge.current = challengeOpen && slide.kind === 'step' ? slide.index : null;
+  useEffect(() => {
+    const at = onChallenge.current;
+    const value = liveMeasures?.[challenge?.measurement ?? ''];
+    if (at === null || !challenge || value === undefined || value < challenge.min || value > challenge.max) return;
+    chime();
+    setSolved((current) => ({ ...current, [at]: 'found' }));
+  }, [liveMeasures]);
+
+  const experimentState =
+    slide.kind === 'missions' ? defaults : challenge && solved[tourIndex] !== 'shown' ? startState : stepState;
   const leftStep =
     liveValues !== null &&
+    experimentState === stepState &&
     Object.entries(stepState).some(([name, value]) => name in liveValues && Math.abs(liveValues[name] - value) > Math.max(1e-6, Math.abs(value) * 1e-3));
+  const challengeMeasurement = plan.simulation.measurements.find((measurement) => measurement.name === challenge?.measurement);
+  const formatValue = (value: number) => new Intl.NumberFormat(language, { maximumFractionDigits: Math.abs(value) >= 10 ? 1 : 2 }).format(value);
 
   // Missions start from the experiment's default settings, which the server checked do not already win them.
   // They are played in order, and only count once the experiment changes on the missions card.
@@ -177,7 +203,9 @@ export function LessonView(props: LessonViewProps) {
 
   // Going forward is held back where the learner has something to do first.
   const canGoForward =
-    index < slides.length - 1 && !(slide.kind === 'predict' && !outcome) && !(slide.kind === 'step' && !html);
+    index < slides.length - 1 && !(slide.kind === 'predict' && !outcome) && !(slide.kind === 'step' && (!html || challengeOpen));
+  // With challenges, the learner works out why in the experiment: the explanation waits for the end of the tour.
+  const discovery = tour.some((entry) => entry.challenge);
 
   const go = useCallback(
     (next: number) => {
@@ -300,7 +328,7 @@ export function LessonView(props: LessonViewProps) {
         {html && (
           <div className={cx(isStep ? 'grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start' : 'hidden')}>
             <div className="order-2 lg:order-1">
-              <SimulationFrame html={html} plan={plan} language={language} state={slide.kind === 'missions' ? defaults : stepState} onValues={onValues} sound={sound} />
+              <SimulationFrame html={html} plan={plan} language={language} state={experimentState} onValues={onValues} sound={sound} />
             </div>
             {slide.kind === 'missions' && (
               <div key={index} className={cx('order-1 flex flex-col gap-3 lg:order-2 lg:sticky lg:top-24', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
@@ -318,11 +346,46 @@ export function LessonView(props: LessonViewProps) {
               <div key={index} className={cx('order-1 flex flex-col gap-3 lg:order-2 lg:sticky lg:top-24', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
                 <Eyebrow>
                   {step.againstIdea && <span className="text-ink">{t('lesson.testIdeaLabel')} · </span>}
+                  {challenge && <span className="text-ink">{t('lesson.challengeLabel')} · </span>}
                   {t('lesson.stepOf', { current: slide.index + 1, total: tour.length })}
                 </Eyebrow>
                 <h2 className="text-[22px] font-semibold leading-tight tracking-tight">{step.title}</h2>
-                <p className="leading-relaxed text-muted">{step.text}</p>
-                {step.observe && <p className="border-l-2 border-accent pl-3 font-medium leading-relaxed">{step.observe}</p>}
+                {challenge && (
+                  <p className={cx('text-[18px] leading-relaxed', challengeOpen ? 'font-medium' : 'text-muted')}>{challenge.question}</p>
+                )}
+                {challengeOpen && challenge ? (
+                  <div className="flex flex-col gap-3">
+                    <p className="text-sm leading-relaxed text-muted">{t('lesson.challengeHint')}</p>
+                    {liveMeasures?.[challenge.measurement] !== undefined && challengeMeasurement && (
+                      <p className="text-sm tabular-nums text-muted">
+                        {challengeMeasurement.label} ·{' '}
+                        <span className="font-medium text-ink">
+                          {formatValue(liveMeasures[challenge.measurement])}
+                          {challengeMeasurement.unit ? ` ${challengeMeasurement.unit}` : ''}
+                        </span>
+                      </p>
+                    )}
+                    <Button variant="ghost" onClick={() => setSolved((current) => ({ ...current, [slide.index]: 'shown' }))}>
+                      {t('lesson.showMe')}
+                    </Button>
+                  </div>
+                ) : (
+                  <div key={`answer-${slide.index}`} className={cx('flex flex-col gap-3', challenge && 'slide-from-right')}>
+                    {challenge && solved[slide.index] && (
+                      <p role="status" className="font-semibold">
+                        {t(solved[slide.index] === 'found' ? 'lesson.challengeFound' : 'lesson.challengeShown')}
+                      </p>
+                    )}
+                    <p className="leading-relaxed text-muted">{step.text}</p>
+                    {step.observe && <p className="border-l-2 border-accent pl-3 font-medium leading-relaxed">{step.observe}</p>}
+                    {discovery && slide.index === tour.length - 1 && (
+                      <div className="rounded-2xl border border-line bg-surface px-4 py-3">
+                        <p className="mb-1 text-sm font-medium text-muted">{t('lesson.whyLabel')}</p>
+                        <p className="leading-relaxed">{plan.prediction.explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {leftStep && (
                   <div className="slide-from-right flex flex-col gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
                     <p className="text-sm leading-relaxed text-muted">{t('lesson.stepChanged')}</p>
@@ -375,14 +438,15 @@ export function LessonView(props: LessonViewProps) {
                 <h2 className="text-[28px] font-semibold leading-tight tracking-tight text-balance">
                   {correct ? t('lesson.correct') : t('lesson.incorrect')}
                 </h2>
-                <p className="text-[17px] leading-relaxed text-muted">{plan.prediction.explanation}</p>
+                <p className="text-[17px] leading-relaxed text-muted">{discovery ? t('lesson.revealSearch') : plan.prediction.explanation}</p>
                 {!correct && counter && <p className="border-l-2 border-accent pl-4 text-[17px] leading-relaxed">{counter.intro}</p>}
                 {!correct && counter === undefined && <p className="text-sm text-subtle">{t('lesson.counterPreparing')}</p>}
               </div>
             )}
 
             {slide.kind === 'concept' && (
-              <div className="flex flex-1 flex-col justify-center gap-4 py-10">
+              <div className="flex flex-1 flex-col justify-center gap-4 py-6">
+                {plan.illustrations?.concepts?.[slide.index] && <Illustration src={illustrations[`concept${slide.index}`]} />}
                 <Eyebrow>{t('lesson.conceptsLabel')}</Eyebrow>
                 <h2 className="text-[30px] font-semibold leading-tight tracking-tight">{plan.concepts[slide.index].term}</h2>
                 <p className="text-[18px] leading-relaxed">{plan.concepts[slide.index].definition}</p>
@@ -392,6 +456,7 @@ export function LessonView(props: LessonViewProps) {
 
             {slide.kind === 'example' && plan.exercise && (
               <div className="flex flex-col gap-5 py-6">
+                {plan.illustrations?.exercise && <Illustration src={illustrations.exercise} />}
                 <Eyebrow>{t('lesson.exerciseLabel')}</Eyebrow>
                 <ExerciseCard plan={plan} exercise={plan.exercise} learner={learner} onDone={onExercise} />
               </div>
