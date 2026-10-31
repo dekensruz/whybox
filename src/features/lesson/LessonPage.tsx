@@ -9,6 +9,7 @@ import { useI18n } from '@/i18n';
 import { learnerFromProfile, requestCounterTour } from './api';
 import { LessonView } from './LessonView';
 import { PreparationProgress } from './PreparationProgress';
+import { useIllustrations } from './useIllustrations';
 import { useLessonPipeline } from './useLessonPipeline';
 
 export function LessonPage() {
@@ -17,6 +18,7 @@ export function LessonPage() {
   const { profile } = useSession();
   const learner = useMemo(() => (profile ? learnerFromProfile(profile) : null), [profile]);
   const { lesson, stage, checks, retry, update } = useLessonPipeline(id, learner);
+  const illustrations = useIllustrations(lesson, update);
   const counterRequested = useRef(false);
 
   const plan = lesson?.plan;
@@ -46,6 +48,11 @@ export function LessonPage() {
     [update],
   );
 
+  const onExercise = useCallback(
+    (exercise: { correct: boolean; attempts: number }) => outcome && update({ outcome: { ...outcome, exercise } }),
+    [outcome, update],
+  );
+
   if (!lesson) return <Navigate to="/" replace />;
 
   const ready = lesson.status === 'ready';
@@ -68,6 +75,8 @@ export function LessonPage() {
         learner={learner}
         realExperiment={lesson.realExperiment}
         onRealResult={onRealResult}
+        onExercise={onExercise}
+        illustrations={illustrations}
       />
     );
   }

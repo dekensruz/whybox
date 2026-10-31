@@ -1,6 +1,17 @@
 // Step 1 of a lesson: understand what the learner asks and plan a personalized lesson.
 import { evaluate } from '../shared/expression.js';
-import type { CounterTour, HomeExperiment, LearnerContext, LearnerMemory, LessonPlan, LessonRequest, TourStep } from '../shared/lesson.js';
+import type {
+  AnswerCheck,
+  CounterTour,
+  Exercise,
+  HomeExperiment,
+  LearnerContext,
+  LearnerMemory,
+  LessonPlan,
+  LessonRequest,
+  Mission,
+  TourStep,
+} from '../shared/lesson.js';
 import { BadRequest } from './http.js';
 import type { InputPart } from './meta.js';
 
@@ -86,8 +97,24 @@ export const PLAN_SHAPE = `{
     "observe": "one short sentence saying exactly where to look on the screen",
     "parameters": { "<parameter name>": "<value the experiment is set to for this step>" }
   }],
-  "example": { "statement": "a small problem with simple round numbers and local currency or objects", "solution": "solved in short numbered lines" },
+  "exercise": {
+    "kind": "number | choice | explain",
+    "question": "a short exercise the learner answers alone, about the lesson's key idea",
+    "options": ["choice only: 3 short options"],
+    "answerIndex": 0,
+    "answer": 12,
+    "unit": "number only: the unit, e.g. m",
+    "tolerance": 0.05,
+    "expected": "explain only: the key idea a correct answer must contain",
+    "hints": ["a first gentle hint that does not give the answer", "a second hint, closer to the answer"],
+    "solution": "the full correct answer, explained in short lines"
+  },
   "summary": "one short sentence that is true on its own",
+  "missions": [{ "goal": "a short challenge, e.g. Make the bulb shine without burning it", "measurement": "<measurement name>", "min": 2, "max": 3, "success": "one short sentence on what this shows" }],
+  "illustrations": {
+    "hook": "in English: one everyday scene that makes the opening question visible, as a painter would see it",
+    "summary": "in English: one scene that shows the key idea in action, different from the hook scene"
+  },
   "homeExperiment": {
     "title": "short title",
     "materials": ["common household objects only"],
@@ -157,6 +184,17 @@ Lesson rules:
 - The steps are a guided tour of the experiment: each step sets the experiment to a state (its "parameters")
   that makes one idea visible, then says where to look. The first step starts from the most familiar situation.
 - The experiment has 2 to 4 parameters and 1 to 3 measurements.
+- "exercise": choose the kind that best makes the learner practise the lesson's idea, like a good teacher would:
+  "number" ONLY when the lesson is about quantities (speed, money, current, area); "choice" to spot a mistake,
+  predict a situation or decide true or false; "explain" for why-questions ("Why does wet laundry dry faster in the sun?").
+  Never invent numbers for a lesson that is not about quantities. Keep only the fields of the chosen kind.
+  The exercise is a NEW situation where the same idea applies (wet laundry in the lesson, a puddle on the road in the
+  exercise): it checks that the learner can use the idea, so it never repeats the hook or the prediction.
+- "missions": 2 or 3 challenges played in the experiment after the guided tour, from easy to harder, each asking to
+  bring one measurement into a range by changing the controls. A mission makes the learner use the idea (not luck),
+  and its range must not include the measurement's value with the default settings.
+- "illustrations": two concrete scenes from the learner's daily life where they live (people, objects, place, light),
+  described in one or two English sentences each. No text, letters, numbers or diagrams in the scenes.
 - "homeExperiment": a real experiment the learner can do at home in 2 minutes and film, where ONE clearly visible
   object moves in a way that shows the lesson's law (a ball that falls or rolls, a pendulum made of string, an object
   that floats). Only safe, cheap, common objects: no fire, no mains electricity, no sharp tools, no chemicals.
@@ -205,7 +243,8 @@ Checklist, apply each item to every field:
 4. Check every statement and every number. Fix anything false, vague, misleading, or with cause and effect reversed.
 5. Check each simulation formula against the real law, term by term, with the units. Replace any invented formula
    with the correct one. Remove parameters that do not correspond to anything real, and update the steps accordingly.
-6. Check the worked example step by step: it must use the same law as the experiment, and the arithmetic must be right.
+6. Check the exercise: its kind fits the lesson (no invented numbers), the answer is right, the arithmetic is right,
+   and no hint gives the answer away.
 7. Keep the language: ${languageName(learner.language)}. No emojis, no exclamation marks.
 
 Keep "answerIndex" pointing to the correct option. Keep the formula syntax rules: only parameter names, numbers,
@@ -217,6 +256,40 @@ Lesson to edit:
 ${JSON.stringify(plan)}`,
   },
 ];
+
+/** Checks a learner's written explanation like a kind teacher: what is right, and one hint about what is missing. */
+export const buildAnswerCheckParts = (plan: LessonPlan, exercise: Exercise, answer: string, attempt: number, learner: LearnerContext): InputPart[] => [
+  {
+    type: 'input_text',
+    text: `You are Whybox, a kind and precise teacher. A learner answered an exercise in their own words.
+
+The learner:
+${describeLearner(learner)}
+
+The lesson: ${plan.title}. ${plan.summary}
+The exercise: ${exercise.question}
+${exercise.kind === 'explain' ? `A correct answer must contain this idea: ${exercise.expected}` : ''}
+The full solution (never reveal it): ${exercise.solution}
+This is the learner's attempt number ${attempt}.
+
+The learner's answer: "${answer}"
+
+Decide if the answer is correct: the key idea is there, even with simple words or spelling mistakes.
+If it is correct: one or two short sentences that say what was right, using their words.
+If it is not: one or two short sentences that start from what they wrote, name what is missing or wrong without
+giving the answer, and ask a small question that helps them find it. Never mock, never say "wrong" bluntly.
+
+${WRITING_RULES}
+
+Write in ${languageName(learner.language)}. Answer with JSON only: { "correct": true or false, "feedback": "..." }`,
+  },
+];
+
+export const parseAnswerCheck = (text: string): AnswerCheck => {
+  const check = extractJson(text) as Partial<AnswerCheck>;
+  if (typeof check.correct !== 'boolean' || typeof check.feedback !== 'string') throw new Error('Unreadable answer check');
+  return { correct: check.correct, feedback: check.feedback.slice(0, 500) };
+};
 
 const extractJson = (text: string): unknown => {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -233,6 +306,78 @@ const shuffle = <T>(items: T[]): T[] => {
     [result[index], result[other]] = [result[other], result[index]];
   }
   return result;
+};
+
+const GRID_STEPS = 12;
+
+/**
+ * Keeps only missions that can really be won: the controls are swept on a grid and a mission is kept if some
+ * setting brings its measurement into range (and the default setting does not already win it).
+ */
+const reachableMissions = (raw: unknown, plan: LessonPlan): Mission[] => {
+  const { parameters, measurements } = plan.simulation;
+  const formulas = new Map(measurements.map((m) => [m.name, m.formula]));
+  const candidates = (Array.isArray(raw) ? raw : []).slice(0, 4) as Array<Partial<Mission>>;
+  const axes = parameters.map((p) =>
+    p.min === 0 && p.max === 1 && p.step === 1 ? [0, 1] : Array.from({ length: GRID_STEPS + 1 }, (_, i) => p.min + ((p.max - p.min) * i) / GRID_STEPS),
+  );
+  // Every combination of the grid (small: at most 4 controls).
+  const settings = axes.reduce<Array<Record<string, number>>>(
+    (combinations, values, index) => combinations.flatMap((combination) => values.map((value) => ({ ...combination, [parameters[index].name]: value }))),
+    [{}],
+  );
+  const defaults = Object.fromEntries(parameters.map((p) => [p.name, p.default]));
+
+  return candidates
+    .filter((mission) => typeof mission.goal === 'string' && typeof mission.measurement === 'string' && formulas.has(mission.measurement))
+    .map((mission) => ({
+      goal: mission.goal!.slice(0, 160),
+      measurement: mission.measurement!,
+      min: Math.min(Number(mission.min), Number(mission.max)),
+      max: Math.max(Number(mission.min), Number(mission.max)),
+      success: String(mission.success ?? '').slice(0, 200),
+    }))
+    .filter((mission) => {
+      if (!Number.isFinite(mission.min) || !Number.isFinite(mission.max)) return false;
+      const formula = formulas.get(mission.measurement)!;
+      const inRange = (setting: Record<string, number>) => {
+        const value = evaluate(formula, setting);
+        return Number.isFinite(value) && value >= mission.min && value <= mission.max;
+      };
+      return !inRange(defaults) && settings.some(inRange);
+    })
+    .slice(0, 3);
+};
+
+/** Keeps a well-formed exercise of one kind, or nothing: a broken exercise is worse than none. */
+const normalizeExercise = (raw: unknown): Exercise | undefined => {
+  const exercise = raw as Record<string, unknown> | undefined;
+  if (!exercise || typeof exercise.question !== 'string' || typeof exercise.solution !== 'string') return undefined;
+  const base = {
+    question: exercise.question.slice(0, 400),
+    hints: (Array.isArray(exercise.hints) ? exercise.hints : []).filter((hint): hint is string => typeof hint === 'string').slice(0, 2),
+    solution: exercise.solution.slice(0, 800),
+  };
+  if (exercise.kind === 'number' && Number.isFinite(Number(exercise.answer))) {
+    const tolerance = Number(exercise.tolerance);
+    return {
+      ...base,
+      kind: 'number',
+      answer: Number(exercise.answer),
+      unit: String(exercise.unit ?? '').slice(0, 12),
+      tolerance: tolerance > 0 && tolerance < 0.5 ? tolerance : 0.05,
+    };
+  }
+  if (exercise.kind === 'choice' && Array.isArray(exercise.options) && exercise.options.length >= 2) {
+    const options = exercise.options.filter((option): option is string => typeof option === 'string').slice(0, 4);
+    const answer = options[Math.min(Math.max(Number(exercise.answerIndex) || 0, 0), options.length - 1)];
+    const shuffled = shuffle(options);
+    return { ...base, kind: 'choice', options: shuffled, answerIndex: shuffled.indexOf(answer) };
+  }
+  if (exercise.kind === 'explain' && typeof exercise.expected === 'string') {
+    return { ...base, kind: 'explain', expected: exercise.expected.slice(0, 400) };
+  }
+  return undefined;
 };
 
 const MOTIONS: HomeExperiment['motion'][] = ['fall', 'swing', 'roll', 'float', 'other'];
@@ -338,6 +483,13 @@ export const parsePlan = (text: string): LessonPlan => {
   }
   simulation.dimension = simulation.dimension === '3d' ? '3d' : '2d';
   plan.homeExperiment = normalizeHomeExperiment(plan.homeExperiment);
+  plan.exercise = normalizeExercise(plan.exercise);
+  plan.missions = reachableMissions(plan.missions, plan);
+  const scenes = plan.illustrations;
+  plan.illustrations =
+    scenes && typeof scenes.hook === 'string' && typeof scenes.summary === 'string'
+      ? { hook: scenes.hook.slice(0, 400), summary: scenes.summary.slice(0, 400) }
+      : undefined;
   plan.steps = normalizeSteps(plan.steps, plan);
 
   // Models tend to put the right answer first: shuffle so its position teaches nothing.

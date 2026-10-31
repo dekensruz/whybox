@@ -24,6 +24,8 @@ const STYLE = [
   `.wb-result{background:${COLORS.surface};border:1px solid ${COLORS.line};border-radius:14px;padding:10px 12px}`,
   `.wb-result span{display:block;font-size:12px;color:${COLORS.muted}}`,
   '.wb-result strong{display:block;font-size:22px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}',
+  `@keyframes wb-flash{0%{background:${COLORS.accentSoft};border-color:${COLORS.accent}}100%{background:${COLORS.surface};border-color:${COLORS.line}}}`,
+  '.wb-changed{animation:wb-flash 1.2s ease-out}',
   '.wb-controls{padding:4px 16px}',
   `.wb-control{padding:12px 0;border-bottom:1px solid ${COLORS.line}}`,
   '.wb-control:last-child{border-bottom:0}',
@@ -143,7 +145,10 @@ export function startExperiment(options, renderer) {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = text;
-        button.addEventListener('click', () => setTarget(p.name, index, true));
+        button.addEventListener('click', () => {
+          tone(index ? 660 : 440, 0.09, 0.05);
+          setTarget(p.name, index, true);
+        });
         input.appendChild(button);
       });
     } else {
@@ -153,7 +158,10 @@ export function startExperiment(options, renderer) {
       input.max = p.max;
       input.step = p.step;
       input.setAttribute('aria-label', p.label);
-      input.addEventListener('input', () => setTarget(p.name, Number(input.value), false));
+      input.addEventListener('input', () => {
+        tick((Number(input.value) - p.min) / (p.max - p.min || 1));
+        setTarget(p.name, Number(input.value), false);
+      });
     }
     row.appendChild(input);
     controls.appendChild(row);
@@ -175,8 +183,49 @@ export function startExperiment(options, renderer) {
     });
     const measured = measureAt(targets);
     spec.measurements.forEach((m) => {
-      resultNodes[m.name].textContent = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
+      const text = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
+      const node = resultNodes[m.name];
+      // A result that changes lights up briefly, so the learner sees what the change did.
+      if (node.textContent && node.textContent !== text) {
+        node.parentNode.classList.remove('wb-changed');
+        void node.parentNode.offsetWidth;
+        node.parentNode.classList.add('wb-changed');
+      }
+      node.textContent = text;
     });
+    // The lesson around the experiment follows the values: to notice the learner left the step, or won a mission.
+    if (window.parent !== window) parent.postMessage({ whyboxValues: { ...targets }, whyboxMeasures: measured }, '*');
+  };
+
+  // ------------------------------------------------------------ sound: tiny generated cues, no audio files
+  let audio = null;
+  let soundOn = true;
+  let lastTick = 0;
+  window.addEventListener('message', (event) => {
+    if (event.data && typeof event.data.whyboxSound === 'boolean') soundOn = event.data.whyboxSound;
+  });
+  const tone = (frequency, duration, volume = 0.05, type = 'sine') => {
+    if (!soundOn) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(volume, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + duration);
+      oscillator.connect(gain).connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + duration);
+    } catch (error) {
+      /* sound is optional */
+    }
+  };
+  const tick = (fraction) => {
+    const now = performance.now();
+    if (now - lastTick < 60) return;
+    lastTick = now;
+    tone(300 + fraction * 500, 0.06, 0.03, 'triangle');
   };
 
   function setTarget(name, value, animate) {

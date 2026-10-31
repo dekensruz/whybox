@@ -1,4 +1,4 @@
-import type { CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
+import type { AnswerCheck, CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
 import type { Profile } from '@/features/profile/types';
 
 export class ApiError extends Error {
@@ -62,6 +62,18 @@ export const analyseRealExperiment = async (
     objectSizeCm,
   });
 };
+
+export const transcribe = async (wav: Blob) => {
+  const response = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  if (!response.ok) throw new ApiError(response.status);
+  return ((await response.json()) as { text: string }).text;
+};
+
+export const requestIllustration = (scene: string, kind: 'hook' | 'summary') =>
+  post<{ image: string }>('/api/lessons/illustrations', { scene, kind }).then((result) => result.image);
+
+export const checkAnswer = (plan: LessonPlan, learner: LearnerContext, answer: string, attempt: number) =>
+  post<AnswerCheck>('/api/lessons/check', { plan, learner, answer, attempt });
 
 export const requestVisualReview = (plan: LessonPlan, snapshots: string[]) =>
   post<{ approved: boolean; issues: string[] }>('/api/lessons/review', { plan, snapshots });
