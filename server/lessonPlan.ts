@@ -1,4 +1,5 @@
 // Step 1 of a lesson: understand what the learner asks and plan a personalized lesson.
+import { challengeStart } from '../shared/challenge.js';
 import { evaluate } from '../shared/expression.js';
 import type {
   AnswerCheck,
@@ -10,6 +11,7 @@ import type {
   LessonPlan,
   LessonRequest,
   Mission,
+  StepChallenge,
   TourStep,
 } from '../shared/lesson.js';
 import { BadRequest } from './http.js';
@@ -93,9 +95,16 @@ export const PLAN_SHAPE = `{
   "concepts": [{ "term": "...", "definition": "one short sentence with everyday words", "analogy": "one short comparison with something the learner does or sees every day" }],
   "steps": [{
     "title": "short title",
-    "text": "2 or 3 short sentences: what changed in the experiment and what it means",
+    "challenge": {
+      "question": "challenge steps only: what the learner must find by moving the controls, without giving the answer away",
+      "find": ["<the parameter names the learner must change; every other parameter starts at this step's value>"],
+      "measurement": "<measurement name>",
+      "min": 0,
+      "max": 100
+    },
+    "text": "2 or 3 short sentences: what changed in the experiment and what it means (for a challenge: what the learner just found and why)",
     "observe": "one short sentence saying exactly where to look on the screen",
-    "parameters": { "<parameter name>": "<value the experiment is set to for this step>" }
+    "parameters": { "<parameter name>": "<value the experiment is set to for this step; for a challenge, one solution>" }
   }],
   "exercise": {
     "kind": "number | choice | explain",
@@ -113,7 +122,9 @@ export const PLAN_SHAPE = `{
   "missions": [{ "goal": "a short challenge, e.g. Make the bulb shine without burning it", "measurement": "<measurement name>", "min": 2, "max": 3, "success": "one short sentence on what this shows" }],
   "illustrations": {
     "hook": "in English: one everyday scene that makes the opening question visible, as a painter would see it",
-    "summary": "in English: one scene that shows the key idea in action, different from the hook scene"
+    "summary": "in English: one scene that shows the key idea in action, different from the hook scene",
+    "concepts": ["in English: one scene per concept, in the same order, showing its everyday analogy"],
+    "exercise": "in English: the situation of the exercise, without showing its answer"
   },
   "homeExperiment": {
     "title": "short title",
@@ -181,8 +192,15 @@ Lesson rules:
 - Write everything in ${languageName(learner.language)}. Calm, warm, respectful tone. No emojis, no exclamation marks.
 - If the learner uses the app in front of a class, phrase things so a teacher can read them aloud to a group.
 - 2 or 3 concepts. 3 to 5 steps.
-- The steps are a guided tour of the experiment: each step sets the experiment to a state (its "parameters")
-  that makes one idea visible, then says where to look. The first step starts from the most familiar situation.
+- The steps are a tour of the experiment where the learner discovers the idea by acting, not by reading.
+  Each step has a state (its "parameters") that makes one idea visible. The first step sets the most familiar
+  situation and has no challenge. From the second step on, at least two steps are challenges: instead of being shown
+  the state, the learner must find it by moving the controls, e.g. "With 500 francs, how many breads can you buy at
+  most? Move the controls to find out." The step's own parameters must be a solution (the challenge's measurement
+  inside [min, max]). "find" names the controls the learner changes (usually one); the challenge starts with them at
+  the previous step's values and every other control at this step's values, which are the givens stated in the
+  question. That starting state must not already solve it. The challenge question never gives the answer away.
+  Steps without a challenge leave out the "challenge" field.
 - The experiment has 2 to 4 parameters and 1 to 3 measurements.
 - "exercise": choose the kind that best makes the learner practise the lesson's idea, like a good teacher would:
   "number" ONLY when the lesson is about quantities (speed, money, current, area); "choice" to spot a mistake,
@@ -193,8 +211,9 @@ Lesson rules:
 - "missions": 2 or 3 challenges played in the experiment after the guided tour, from easy to harder, each asking to
   bring one measurement into a range by changing the controls. A mission makes the learner use the idea (not luck),
   and its range must not include the measurement's value with the default settings.
-- "illustrations": two concrete scenes from the learner's daily life where they live (people, objects, place, light),
-  described in one or two English sentences each. No text, letters, numbers or diagrams in the scenes.
+- "illustrations": concrete scenes from the learner's daily life where they live (people, objects, place, light),
+  described in one or two English sentences each: the hook, the summary, one per concept showing its analogy, and the
+  exercise's situation. Every scene is different. No text, letters, numbers or diagrams in the scenes.
 - "homeExperiment": a real experiment the learner can do at home in 2 minutes and film, where ONE clearly visible
   object moves in a way that shows the lesson's law (a ball that falls or rolls, a pendulum made of string, an object
   that floats). Only safe, cheap, common objects: no fire, no mains electricity, no sharp tools, no chemicals.
@@ -245,7 +264,9 @@ Checklist, apply each item to every field:
    with the correct one. Remove parameters that do not correspond to anything real, and update the steps accordingly.
 6. Check the exercise: its kind fits the lesson (no invented numbers), the answer is right, the arithmetic is right,
    and no hint gives the answer away.
-7. Keep the language: ${languageName(learner.language)}. No emojis, no exclamation marks.
+7. Check the challenges of the steps: each question is clear, never gives the answer away, and the step's parameters
+   really bring its measurement inside [min, max]. Keep at least two challenges from the second step on.
+8. Keep the language: ${languageName(learner.language)}. No emojis, no exclamation marks.
 
 Keep "answerIndex" pointing to the correct option. Keep the formula syntax rules: only parameter names, numbers,
 + - * / ^, parentheses and sqrt, abs, sin, cos, tan, exp, log, pow, min, max, pi.
@@ -404,7 +425,9 @@ const normalizeHomeExperiment = (experiment: HomeExperiment | null | undefined):
 /** Each step drives the experiment: keep only known parameters, clamped to their range. */
 const normalizeSteps = (steps: TourStep[], plan: LessonPlan): TourStep[] => {
   const ranges = new Map(plan.simulation.parameters.map((parameter) => [parameter.name, parameter]));
-  return steps
+  const formulas = new Map(plan.simulation.measurements.map((m) => [m.name, m.formula]));
+  const defaults = Object.fromEntries(plan.simulation.parameters.map((p) => [p.name, p.default]));
+  const tour = steps
     .filter((step) => step && typeof step.title === 'string' && typeof step.text === 'string')
     .map((step) => ({
       title: step.title,
@@ -418,7 +441,25 @@ const normalizeSteps = (steps: TourStep[], plan: LessonPlan): TourStep[] => {
             return [name, Math.min(max, Math.max(min, Number(value)))];
           }),
       ),
+      challenge: step.challenge as Partial<StepChallenge> | undefined,
     }));
+
+  // A challenge is kept only if the step's own state solves it and the state the learner starts from does not:
+  // the learner always has something to find, and it can be found.
+  return tour.map(({ challenge, ...step }, index): TourStep => {
+    const formula = formulas.get(String(challenge?.measurement));
+    if (index === 0 || !challenge || typeof challenge.question !== 'string' || !formula) return step;
+    const min = Math.min(Number(challenge.min), Number(challenge.max));
+    const max = Math.max(Number(challenge.min), Number(challenge.max));
+    const solves = (state: Record<string, number>) => {
+      const value = evaluate(formula, state);
+      return Number.isFinite(value) && value >= min && value <= max;
+    };
+    const find = (Array.isArray(challenge.find) ? challenge.find : []).filter((name) => ranges.has(name));
+    const start = challengeStart(defaults, tour[index - 1].parameters, step.parameters, find);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || solves(start) || !solves({ ...defaults, ...step.parameters })) return step;
+    return { ...step, challenge: { question: challenge.question.slice(0, 300), find, measurement: challenge.measurement!, min, max } };
+  });
 };
 
 /** A short guided tour, on the same experiment, designed to let the learner test their own wrong idea. */
@@ -486,9 +527,15 @@ export const parsePlan = (text: string): LessonPlan => {
   plan.exercise = normalizeExercise(plan.exercise);
   plan.missions = reachableMissions(plan.missions, plan);
   const scenes = plan.illustrations;
+  const scene = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim().slice(0, 400) : undefined);
   plan.illustrations =
-    scenes && typeof scenes.hook === 'string' && typeof scenes.summary === 'string'
-      ? { hook: scenes.hook.slice(0, 400), summary: scenes.summary.slice(0, 400) }
+    scenes && scene(scenes.hook) && scene(scenes.summary)
+      ? {
+          hook: scene(scenes.hook)!,
+          summary: scene(scenes.summary)!,
+          concepts: (Array.isArray(scenes.concepts) ? scenes.concepts : []).slice(0, (plan.concepts ?? []).length).map((item) => scene(item) ?? ''),
+          ...(scene(scenes.exercise) && plan.exercise && { exercise: scene(scenes.exercise) }),
+        }
       : undefined;
   plan.steps = normalizeSteps(plan.steps, plan);
 
