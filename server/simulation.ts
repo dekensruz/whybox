@@ -12,6 +12,8 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
   a trail, a ruler with the distance), so a still picture of each step is clearly different from the others.
 - At most 5 labels of 1 to 3 words each. Never write equations, calculations, sentences or numbers with their
   explanation inside the scene: the measurements already appear in the result cards below the scene.
+- Labels use words a child knows ("Poids", "Air qui pousse"), never a technical word the lesson's steps have not
+  explained, and never jargon such as "air dévié" or "angle d'attaque".
 - Leave free space around objects so labels have room. Never draw text boxes or panels inside the scene.
 - Draw only what serves the idea. Flat, clean shapes, consistent strokes, no decoration, no emojis.
 - Every shape is either a recognizable real object of the situation (use g.icon and g.items whenever one fits) or a

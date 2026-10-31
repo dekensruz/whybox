@@ -172,7 +172,35 @@ Truth rules:
 - Every sentence must be scientifically true on its own. Never reverse cause and effect.
 - Every measurement formula is the real law of physics, chemistry or math, not an invented approximation
   and no made-up correction terms. Unit conversions are explicit and correct.
-- The summary must be a correct statement of the key idea, not a slogan.`;
+- The summary must be a correct statement of the key idea, not a slogan.
+
+Word rules:
+- A technical word (lift, density, current, friction...) never appears before the thing it names has been shown.
+  The first time it appears, it is explained in the same sentence: "the push of the air under the wing, which we
+  call lift". This holds everywhere: steps, challenges, labels of controls and measurements, missions.
+- A comparison must work the same way as the real thing, not just look like it. A boat floating does not explain
+  a wing flying. If no true everyday comparison exists, describe what the learner can feel or see instead.
+- Quantities are ones a child can picture: seconds, metres, kilograms, francs, how many times bigger, a percent.
+  No newtons, joules, pascals or watts unless the learner's level and question are about that unit; prefer a
+  measurement that compares (the push of the air as a percent of the weight) to an unfamiliar unit.
+- Labels of controls and measurements are 1 to 4 everyday words that name the thing ("Vitesse de l'avion",
+  "Pente de l'aile", "Poussée de l'air"), with no explanation inside: the unit goes in "unit", and what the
+  numbers mean is said in a step.
+- Questions and challenges ask about the idea, never describe gestures on the screen ("touch the bar with your
+  finger"): the learner already knows how to move a control.
+
+The voice to imitate (examples in French; write in the language of the lesson). Each pair: what we write badly,
+then how a great teacher says it:
+- Mauvais : « L'air ne glisse pas sur l'aile. L'air ne pousse donc pas l'aile vers le haut. »
+  Bon : « Sors ta main par la fenêtre d'un taxi qui roule. Tu sens l'air qui la pousse ? Penche-la un peu :
+  ta main monte toute seule. Une aile d'avion, c'est cette main, en très grand. »
+- Mauvais : « Regarde la portance, elle est à zéro. »
+  Bon : « Regarde la flèche jaune : c'est l'air qui pousse l'aile vers le haut. Pour l'instant, il n'y en a pas. »
+- Mauvais : « La portance augmente avec le carré de la vitesse. »
+  Bon : « Plus l'avion va vite, plus l'air pousse fort. Deux fois plus vite, et l'air pousse quatre fois plus fort. »
+- Mauvais : « La masse volumique de l'eau est supérieure à celle de l'huile. »
+  Bon : « Prends une bouteille d'eau et une bouteille d'huile de la même taille. Celle d'eau est plus lourde.
+  C'est pour ça que l'huile reste au-dessus. »`;
 
 export const buildPlanParts = ({ learner, question, image }: LessonRequest): InputPart[] => {
   const parts: InputPart[] = [
@@ -240,7 +268,62 @@ ${PLAN_SHAPE}`,
  * Second pass by an editor agent: simplify the language, remove forced local references,
  * and catch statements that are not scientifically true.
  */
-export const buildReviewParts = (plan: LessonPlan, learner: LearnerContext): InputPart[] => [
+/** Everything the learner reads in a lesson, in the order they read it, each with where it comes from. */
+const readableText = (plan: LessonPlan): string =>
+  [
+    `hook: ${plan.hook}`,
+    `prediction.question: ${plan.prediction.question}`,
+    ...plan.prediction.options.map((option, index) => `prediction.options[${index}]: ${option}`),
+    `prediction.explanation: ${plan.prediction.explanation}`,
+    ...plan.simulation.parameters.map((parameter, index) => `simulation.parameters[${index}].label: ${parameter.label} (${parameter.unit})`),
+    ...plan.simulation.measurements.map((measurement, index) => `simulation.measurements[${index}].label: ${measurement.label} (${measurement.unit})`),
+    ...plan.steps.flatMap((step, index) => [
+      `steps[${index}].title: ${step.title}`,
+      ...(step.challenge ? [`steps[${index}].challenge.question: ${step.challenge.question}`] : []),
+      `steps[${index}].text: ${step.text}`,
+      `steps[${index}].observe: ${step.observe}`,
+    ]),
+    ...plan.concepts.flatMap((concept, index) => [
+      `concepts[${index}]: ${concept.term}. ${concept.definition} ${concept.analogy}`,
+    ]),
+    ...(plan.exercise ? [`exercise.question: ${plan.exercise.question}`, `exercise.solution: ${plan.exercise.solution}`] : []),
+    ...(plan.missions ?? []).map((mission, index) => `missions[${index}].goal: ${mission.goal}`),
+    `summary: ${plan.summary}`,
+  ].join('\n');
+
+/**
+ * A young reader agent: reads the lesson as a 10-year-old who finds school hard, and says exactly where they get lost.
+ * Its notes go to the editor, who rewrites until a child would understand everything.
+ */
+export const buildChildReadParts = (plan: LessonPlan, learner: LearnerContext): InputPart[] => [
+  {
+    type: 'input_text',
+    text: `You are a 10-year-old child who lives in ${countryName(learner.country)} and finds school hard. You read well
+enough, but you only know everyday words. You have never studied this subject.
+
+Read this lesson line by line, honestly, as that child. Note every place where you get lost:
+- a word you do not know, or that is used before anyone told you what it means;
+- a sentence you have to read twice, or that is abstract (you cannot picture anything);
+- a comparison that does not help you, or that seems to say something else;
+- a number or unit you cannot picture (what is a newton?);
+- a question or challenge where you do not know what you are asked to do.
+
+The lesson (field: text):
+${readableText(plan)}
+
+Answer with JSON only: { "notes": [{ "field": "steps[0].observe", "quote": "the words that lose you", "why": "what you did not understand, in a child's words" }] }
+At most 12 notes, the most blocking first. If you understand everything, notes is empty.`,
+  },
+];
+
+export const parseChildRead = (text: string): string[] => {
+  const read = extractJson(text) as { notes?: Array<{ field?: unknown; quote?: unknown; why?: unknown }> };
+  return (Array.isArray(read.notes) ? read.notes : [])
+    .slice(0, 12)
+    .map((note) => `${String(note.field ?? '')}: "${String(note.quote ?? '')}" (${String(note.why ?? '')})`);
+};
+
+export const buildReviewParts = (plan: LessonPlan, learner: LearnerContext, childNotes: string[] = []): InputPart[] => [
   {
     type: 'input_text',
     text: `You are the demanding editor and science checker of Whybox lessons.
@@ -249,6 +332,14 @@ The learner:
 ${describeLearner(learner)}
 
 Rewrite the lesson below so it follows every rule, then return it.
+${
+  childNotes.length
+    ? `
+A 10-year-old read this lesson and got lost at these places. Fix every one of them, and anything similar elsewhere:
+${childNotes.map((note) => `- ${note}`).join('\n')}
+`
+    : ''
+}
 
 ${WRITING_RULES}
 
