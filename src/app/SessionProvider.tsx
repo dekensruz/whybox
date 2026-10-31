@@ -16,7 +16,6 @@ interface SessionValue {
   profile: Profile | null;
   onlineSignInAvailable: boolean;
   signInWithGoogle: () => Promise<void>;
-  signInWithEmail: (email: string) => Promise<void>;
   continueAsGuest: () => void;
   updateProfile: (profile: Profile) => Promise<void>;
   signOut: () => Promise<void>;
@@ -34,8 +33,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+    const auth = supabase.auth;
+    auth.getSession().then(async ({ data }) => {
+      let current = data.session?.user ?? null;
+      if (current) {
+        // The stored session can outlive its account (deleted user, revoked session): check it with the server.
+        // Network failures keep the session so the app still opens offline.
+        const { error } = await auth.getUser();
+        if (error && error.status && error.status >= 400 && error.status < 500) {
+          await auth.signOut({ scope: 'local' });
+          current = null;
+        }
+      }
+      setUser(current);
       setAuthReady(true);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
@@ -73,15 +83,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, [redirectTo]);
 
-  const signInWithEmail = useCallback(
-    async (email: string) => {
-      if (!supabase) throw new Error('Supabase is not configured');
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
-      if (error) throw error;
-    },
-    [redirectTo],
-  );
-
   const continueAsGuest = useCallback(() => {
     writeStorage(GUEST_KEY, '1');
     setIsGuest(true);
@@ -111,12 +112,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       profile,
       onlineSignInAvailable: Boolean(supabase),
       signInWithGoogle,
-      signInWithEmail,
       continueAsGuest,
       updateProfile,
       signOut,
     }),
-    [authReady, profileOwner, sessionKey, mode, user, profile, signInWithGoogle, signInWithEmail, continueAsGuest, updateProfile, signOut],
+    [authReady, profileOwner, sessionKey, mode, user, profile, signInWithGoogle, continueAsGuest, updateProfile, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

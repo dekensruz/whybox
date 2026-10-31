@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { Chip } from '@/components/ui/Chip';
 import { SelectField, TextField } from '@/components/ui/Field';
@@ -13,6 +14,7 @@ import {
   type DeviceUsage,
   type Level,
 } from '@/features/profile/types';
+import { countryName } from '@/features/profile/countryName';
 import { useI18n, type MessageKey } from '@/i18n';
 import type { Draft, StepId } from './steps';
 
@@ -159,15 +161,23 @@ export function StepContent({ step, draft, update }: StepContentProps) {
           title={isTeacher ? t('onboarding.subjects.teacherTitle') : t('onboarding.subjects.studentTitle')}
           hint={t('onboarding.subjects.hint')}
         >
-          <div className="flex flex-wrap gap-2.5">
-            {SUBJECTS.map((subject) => (
-              <Chip
-                key={subject}
-                label={t(`options.subjects.${subject}`)}
-                selected={draft.subjects.includes(subject)}
-                onToggle={() => update({ subjects: toggle(draft.subjects, subject) })}
-              />
-            ))}
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-wrap gap-2.5">
+              {SUBJECTS.map((subject) => (
+                <Chip
+                  key={subject}
+                  label={t(`options.subjects.${subject}`)}
+                  selected={draft.subjects.includes(subject)}
+                  onToggle={() => update({ subjects: toggle(draft.subjects, subject) })}
+                />
+              ))}
+              {draft.subjects
+                .filter((subject) => !isKnownSubject(subject))
+                .map((subject) => (
+                  <Chip key={subject} label={subject} selected onToggle={() => update({ subjects: toggle(draft.subjects, subject) })} />
+                ))}
+            </div>
+            <CustomSubjectInput onAdd={(subject) => update({ subjects: addUnique(draft.subjects, subject) })} />
           </div>
         </Question>
       );
@@ -208,9 +218,8 @@ export function StepContent({ step, draft, update }: StepContentProps) {
 
 function CountrySelect({ value, onChange, language }: { value: string; onChange: (code: string) => void; language: string }) {
   const { t } = useI18n();
-  const names = new Intl.DisplayNames([language], { type: 'region' });
   const sortByName = (codes: string[]) =>
-    codes.map((code) => ({ code, name: names.of(code) ?? code })).sort((a, b) => a.name.localeCompare(b.name, language));
+    codes.map((code) => ({ code, name: countryName(code, language) })).sort((a, b) => a.name.localeCompare(b.name, language));
   const featured = sortByName(FEATURED_COUNTRIES);
   const others = sortByName(COUNTRIES.filter((code) => !FEATURED_COUNTRIES.includes(code)));
 
@@ -238,3 +247,39 @@ function CountrySelect({ value, onChange, language }: { value: string; onChange:
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+const isKnownSubject = (subject: string) => (SUBJECTS as readonly string[]).includes(subject);
+
+/** Adds a custom subject unless the same name (any case) is already there. */
+const addUnique = (list: string[], value: string) =>
+  list.some((item) => item.toLowerCase() === value.toLowerCase()) ? list : [...list, value];
+
+function CustomSubjectInput({ onAdd }: { onAdd: (subject: string) => void }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState('');
+  const subject = capitalize(value.trim());
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (!subject) return;
+    onAdd(subject);
+    setValue('');
+  };
+
+  return (
+    <form onSubmit={submit} className="flex items-end gap-2">
+      <div className="flex-1">
+        <TextField
+          label={t('onboarding.subjects.customLabel')}
+          placeholder={t('onboarding.subjects.customPlaceholder')}
+          maxLength={40}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+        />
+      </div>
+      <Button type="submit" variant="secondary" disabled={!subject}>
+        {t('onboarding.subjects.add')}
+      </Button>
+    </form>
+  );
+}

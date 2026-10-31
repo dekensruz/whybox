@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { useId } from 'react';
 
 const CONTROL =
@@ -23,6 +23,14 @@ function Field({ label, children }: FieldProps) {
 
 export function TextField({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
   return <Field label={label}>{(id) => <input id={id} className={CONTROL} {...props} />}</Field>;
+}
+
+export function TextAreaField({ label, ...props }: { label: string } & TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <Field label={label}>
+      {(id) => <textarea id={id} className={`${CONTROL} h-auto min-h-32 resize-none py-3 leading-relaxed`} {...props} />}
+    </Field>
+  );
 }
 
 export function SelectField({ label, children, ...props }: { label: string } & SelectHTMLAttributes<HTMLSelectElement>) {

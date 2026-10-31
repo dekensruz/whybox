@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSession } from '@/app/SessionProvider';
+import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import type { Profile } from '@/features/profile/types';
@@ -50,6 +51,7 @@ export function OnboardingPage() {
   const [draft, setDraft] = useState<Draft>(() => initialDraft(language));
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   const steps = useMemo(() => STEPS_BY_ROLE[draft.role ?? 'student'], [draft.role]);
   const step = steps[index];
@@ -63,9 +65,12 @@ export function OnboardingPage() {
       return;
     }
     setSaving(true);
+    setSaveFailed(false);
     try {
       await updateProfile({ ...draft, firstName: draft.firstName.trim(), city: draft.city.trim() } as Profile);
       navigate('/', { replace: true });
+    } catch {
+      setSaveFailed(true);
     } finally {
       setSaving(false);
     }
@@ -96,13 +101,21 @@ export function OnboardingPage() {
             >
               <div className="h-full rounded-full bg-ink transition-[width] duration-300" style={{ width: `${((index + 1) / questionCount) * 100}%` }} />
             </div>
+            <LanguageSwitch />
           </div>
         )
       }
       footer={
-        <Button block onClick={next} disabled={!isComplete(step, draft) || saving}>
-          {step === 'done' ? t('onboarding.done.cta') : t('common.continue')}
-        </Button>
+        <div className="flex flex-col gap-3">
+          {saveFailed && (
+            <p role="alert" className="text-center text-sm text-danger">
+              {t('auth.errors.unknown')}
+            </p>
+          )}
+          <Button block onClick={next} disabled={!isComplete(step, draft) || saving}>
+            {step === 'done' ? t('onboarding.done.cta') : t('common.continue')}
+          </Button>
+        </div>
       }
     >
       <div key={step} className="flex flex-1 flex-col pt-8">
