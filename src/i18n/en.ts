@@ -281,6 +281,17 @@ export const en: Messages = {
     close: 'Leave the lesson',
     swipeHint: 'Swipe or tap Next',
     waitExperiment: 'The experiment is almost ready.',
+    exerciseLabel: 'Your turn',
+    answerLabel: 'Your answer',
+    answerPlaceholder: 'Write in your own words',
+    check: 'Check',
+    checking: 'Whybox is reading your answer…',
+    rightAnswer: 'Well done, that is right.',
+    tryAgain: 'Not quite. Here is a hint:',
+    hintLabel: 'Hint',
+    lastTry: 'One more try, or look at the solution.',
+    stepChanged: 'You changed the settings: the text describes the original step.',
+    backToStep: 'Back to the step',
   },
   options: {
     interests: {

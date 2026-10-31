@@ -279,6 +279,17 @@ export const fr = {
     close: 'Quitter la leçon',
     swipeHint: 'Glissez ou appuyez sur Suivant',
     waitExperiment: 'L’expérience arrive dans un instant.',
+    exerciseLabel: 'À vous de jouer',
+    answerLabel: 'Votre réponse',
+    answerPlaceholder: 'Écrivez avec vos mots',
+    check: 'Vérifier',
+    checking: 'Whybox lit votre réponse…',
+    rightAnswer: 'Bravo, c’est juste.',
+    tryAgain: 'Pas tout à fait. Voici un indice :',
+    hintLabel: 'Indice',
+    lastTry: 'Encore un essai, ou regardez la solution.',
+    stepChanged: 'Vous avez changé les réglages : le texte décrit l’étape d’origine.',
+    backToStep: 'Revenir à l’étape',
   },
   options: {
     interests: {

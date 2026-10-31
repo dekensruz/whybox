@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { useI18n } from '@/i18n';
 import { cx } from '@/lib/cx';
+import { ExerciseCard, type ExerciseResult } from './ExerciseCard';
 import { RealExperiment } from './real/RealExperiment';
 import { SimulationFrame } from './SimulationFrame';
 import type { LessonOutcome, Verification } from './types';
@@ -35,6 +36,7 @@ interface LessonViewProps {
   learner: LearnerContext | null;
   realExperiment?: RealExperimentResult & { objectSizeCm: number };
   onRealResult: (result: RealExperimentResult & { objectSizeCm: number }) => void;
+  onExercise: (result: ExerciseResult) => void;
 }
 
 type TourEntry = TourStep & { againstIdea: boolean };
@@ -61,7 +63,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
  */
 export function LessonView(props: LessonViewProps) {
   const { plan, html, verification, language, preparation, outcome, counter, onPredict, onTourComplete, onUnderstanding } = props;
-  const { learner, realExperiment, onRealResult } = props;
+  const { learner, realExperiment, onRealResult, onExercise } = props;
   const { t } = useI18n();
   const navigate = useNavigate();
   const [choice, setChoice] = useState<number | null>(outcome?.chosen ?? null);
@@ -85,7 +87,7 @@ export function LessonView(props: LessonViewProps) {
       { kind: 'reveal' },
       ...tour.map((_, step): Slide => ({ kind: 'step', index: step })),
       ...plan.concepts.map((_, concept): Slide => ({ kind: 'concept', index: concept })),
-      { kind: 'example' },
+      ...(plan.exercise || plan.example ? [{ kind: 'example' } as Slide] : []),
       { kind: 'summary' },
       ...(plan.homeExperiment && learner ? [{ kind: 'real' } as Slide] : []),
       { kind: 'end' },
@@ -104,7 +106,20 @@ export function LessonView(props: LessonViewProps) {
     if (slide.kind === 'step') setTourIndex(slide.index);
   }, [slide]);
   const step = tour[Math.min(tourIndex, tour.length - 1)];
-  const stepState = useMemo(() => ({ ...defaults, ...step.parameters }), [defaults, step]);
+  // A new version re-applies the step, after the learner moved the controls away from it.
+  const [stateVersion, setStateVersion] = useState(0);
+  const stepState = useMemo(() => ({ ...defaults, ...step.parameters }), [defaults, step, stateVersion]);
+
+  // The step text describes the step's own values: notice when the learner's values no longer match it.
+  const [liveValues, setLiveValues] = useState<Record<string, number> | null>(null);
+  const settle = useRef<number | undefined>(undefined);
+  const onValues = useCallback((values: Record<string, number>) => {
+    window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => setLiveValues(values), 400);
+  }, []);
+  const leftStep =
+    liveValues !== null &&
+    Object.entries(stepState).some(([name, value]) => name in liveValues && Math.abs(liveValues[name] - value) > Math.max(1e-6, Math.abs(value) * 1e-3));
 
   useEffect(() => {
     if (slide.kind === 'step' && slide.index === tour.length - 1 && outcome && !outcome.tourCompleted) onTourComplete();
@@ -207,7 +222,7 @@ export function LessonView(props: LessonViewProps) {
         {html && (
           <div className={cx(isStep ? 'grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start' : 'hidden')}>
             <div className="order-2 lg:order-1">
-              <SimulationFrame html={html} plan={plan} language={language} state={stepState} />
+              <SimulationFrame html={html} plan={plan} language={language} state={stepState} onValues={onValues} />
             </div>
             {isStep && (
               <div key={index} className={cx('order-1 flex flex-col gap-3 lg:order-2 lg:sticky lg:top-24', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
@@ -218,6 +233,14 @@ export function LessonView(props: LessonViewProps) {
                 <h2 className="text-[22px] font-semibold leading-tight tracking-tight">{step.title}</h2>
                 <p className="leading-relaxed text-muted">{step.text}</p>
                 {step.observe && <p className="border-l-2 border-accent pl-3 font-medium leading-relaxed">{step.observe}</p>}
+                {leftStep && (
+                  <div className="slide-from-right flex flex-col gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
+                    <p className="text-sm leading-relaxed text-muted">{t('lesson.stepChanged')}</p>
+                    <Button variant="secondary" onClick={() => setStateVersion((version) => version + 1)}>
+                      {t('lesson.backToStep')}
+                    </Button>
+                  </div>
+                )}
                 {slide.index === tour.length - 1 && <p className="text-sm text-subtle">{t('lesson.explore')}</p>}
                 {slide.index === tour.length - 1 && verification && (
                   <p className="flex items-center gap-2 text-sm text-muted">
@@ -276,7 +299,15 @@ export function LessonView(props: LessonViewProps) {
               </div>
             )}
 
-            {slide.kind === 'example' && (
+            {slide.kind === 'example' && plan.exercise && (
+              <div className="flex flex-col gap-5 py-6">
+                <Eyebrow>{t('lesson.exerciseLabel')}</Eyebrow>
+                <ExerciseCard plan={plan} exercise={plan.exercise} learner={learner} onDone={onExercise} />
+              </div>
+            )}
+
+            {/* Lessons created before exercises existed keep their worked example. */}
+            {slide.kind === 'example' && !plan.exercise && plan.example && (
               <div className="flex flex-col gap-5 py-6">
                 <Eyebrow>{t('lesson.exampleLabel')}</Eyebrow>
                 <p className="text-[19px] leading-relaxed">{plan.example.statement}</p>

@@ -19,6 +19,7 @@ export interface LessonOutcome {
   predictionCorrect: boolean;
   tourCompleted?: boolean;
   understanding?: Understanding;
+  exercise?: { correct: boolean; attempts: number };
 }
 
 export interface Lesson {

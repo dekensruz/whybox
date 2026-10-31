@@ -23,9 +23,16 @@ export const buildLearnerMemory = (lessons: Lesson[], excludeId?: string): Learn
     .slice(0, WRONG_IDEAS);
 
   // Depth follows what the learner actually showed, not only their declared level.
-  const lastThree = recentLessons.slice(0, 3);
-  const struggled = lastThree.filter((lesson) => lesson.understanding === 'lost' || (!lesson.predictionCorrect && lesson.understanding !== 'clear'));
-  const mastered = lastThree.filter((lesson) => lesson.understanding === 'clear' && lesson.predictionCorrect);
+  const lastThree = done.slice(0, 3).map((lesson) => lesson.outcome!);
+  const struggled = lastThree.filter(
+    (outcome) =>
+      outcome.understanding === 'lost' ||
+      (outcome.exercise && !outcome.exercise.correct) ||
+      (!outcome.predictionCorrect && outcome.understanding !== 'clear'),
+  );
+  const mastered = lastThree.filter(
+    (outcome) => outcome.understanding === 'clear' && outcome.predictionCorrect && (!outcome.exercise || outcome.exercise.correct),
+  );
   const adapt = struggled.length >= 2 ? 'simpler' : lastThree.length === 3 && mastered.length === 3 ? 'deeper' : 'same';
 
   return { recentLessons, wrongIdeas, adapt };

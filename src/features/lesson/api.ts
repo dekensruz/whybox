@@ -1,4 +1,4 @@
-import type { CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
+import type { AnswerCheck, CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
 import type { Profile } from '@/features/profile/types';
 
 export class ApiError extends Error {
@@ -62,6 +62,9 @@ export const analyseRealExperiment = async (
     objectSizeCm,
   });
 };
+
+export const checkAnswer = (plan: LessonPlan, learner: LearnerContext, answer: string, attempt: number) =>
+  post<AnswerCheck>('/api/lessons/check', { plan, learner, answer, attempt });
 
 export const requestVisualReview = (plan: LessonPlan, snapshots: string[]) =>
   post<{ approved: boolean; issues: string[] }>('/api/lessons/review', { plan, snapshots });

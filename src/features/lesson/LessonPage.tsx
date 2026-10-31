@@ -46,6 +46,11 @@ export function LessonPage() {
     [update],
   );
 
+  const onExercise = useCallback(
+    (exercise: { correct: boolean; attempts: number }) => outcome && update({ outcome: { ...outcome, exercise } }),
+    [outcome, update],
+  );
+
   if (!lesson) return <Navigate to="/" replace />;
 
   const ready = lesson.status === 'ready';
@@ -68,6 +73,7 @@ export function LessonPage() {
         learner={learner}
         realExperiment={lesson.realExperiment}
         onRealResult={onRealResult}
+        onExercise={onExercise}
       />
     );
   }

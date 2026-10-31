@@ -94,6 +94,25 @@ export interface RealExperimentResult {
   explanation: string;
 }
 
+/** An exercise the learner answers before seeing the solution. The kind fits what the lesson needs to practise. */
+export type Exercise = {
+  question: string;
+  /** Two hints, from gentle to close, that never give the answer away. */
+  hints: string[];
+  solution: string;
+} & (
+  | { kind: 'number'; answer: number; unit: string; tolerance: number }
+  | { kind: 'choice'; options: string[]; answerIndex: number }
+  | { kind: 'explain'; expected: string }
+);
+
+/** Verdict on a learner's written answer to an "explain" exercise. */
+export interface AnswerCheck {
+  correct: boolean;
+  /** Praise and confirmation when correct, a hint aimed at their own mistake otherwise. */
+  feedback: string;
+}
+
 export interface LessonPlan {
   title: string;
   subject: string;
@@ -108,7 +127,9 @@ export interface LessonPlan {
   concepts: Array<{ term: string; definition: string; analogy: string }>;
   /** A guided tour of the experiment: each step sets it to a state and says where to look. */
   steps: TourStep[];
-  example: { statement: string; solution: string };
+  /** Worked example of lessons created before exercises existed. */
+  example?: { statement: string; solution: string };
+  exercise?: Exercise;
   summary: string;
   /** Null when no safe experiment with a trackable object fits the lesson. */
   homeExperiment?: HomeExperiment | null;
