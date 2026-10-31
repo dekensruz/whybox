@@ -1,7 +1,7 @@
 import type { LearnerContext, LessonPlan } from '../../shared/lesson.js';
 import { BadRequest, handle, json, readBody } from '../../server/http.js';
 import { buildCounterParts, parseCounter, sanitizeLearner } from '../../server/lessonPlan.js';
-import { callModel, MODELS, ModelError } from '../../server/meta.js';
+import { callModel, ModelError, openFirst } from '../../server/meta.js';
 
 interface CounterRequest {
   plan: LessonPlan;
@@ -16,14 +16,15 @@ export const POST = handle(async (request) => {
   if (!plan?.simulation?.parameters || !plan.prediction || typeof idea !== 'string' || !idea.trim()) {
     throw new BadRequest('Missing plan or idea');
   }
-  const { text } = await callModel({
-    model: MODELS.generation(),
-    parts: buildCounterParts(plan, idea.slice(0, 200), sanitizeLearner(learner)),
-    effort: 'low',
+  const parts = buildCounterParts(plan, idea.slice(0, 200), sanitizeLearner(learner));
+  // The tour answers the learner's own wrong idea, so it runs on the open-weight model.
+  const tour = await openFirst(async (model) => {
+    const { text } = await callModel({ model, parts, effort: 'low' });
+    try {
+      return parseCounter(text, plan, idea.slice(0, 200));
+    } catch (error) {
+      throw new ModelError(`Unusable counter tour: ${(error as Error).message}`);
+    }
   });
-  try {
-    return json({ tour: parseCounter(text, plan, idea.slice(0, 200)) });
-  } catch (error) {
-    throw new ModelError(`Unusable counter tour: ${(error as Error).message}`);
-  }
+  return json({ tour });
 });
