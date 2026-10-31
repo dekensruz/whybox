@@ -9,6 +9,7 @@ import type {
   LearnerMemory,
   LessonPlan,
   LessonRequest,
+  Mission,
   TourStep,
 } from '../shared/lesson.js';
 import { BadRequest } from './http.js';
@@ -109,6 +110,11 @@ export const PLAN_SHAPE = `{
     "solution": "the full correct answer, explained in short lines"
   },
   "summary": "one short sentence that is true on its own",
+  "missions": [{ "goal": "a short challenge, e.g. Make the bulb shine without burning it", "measurement": "<measurement name>", "min": 2, "max": 3, "success": "one short sentence on what this shows" }],
+  "illustrations": {
+    "hook": "in English: one everyday scene that makes the opening question visible, as a painter would see it",
+    "summary": "in English: one scene that shows the key idea in action, different from the hook scene"
+  },
   "homeExperiment": {
     "title": "short title",
     "materials": ["common household objects only"],
@@ -184,6 +190,11 @@ Lesson rules:
   Never invent numbers for a lesson that is not about quantities. Keep only the fields of the chosen kind.
   The exercise is a NEW situation where the same idea applies (wet laundry in the lesson, a puddle on the road in the
   exercise): it checks that the learner can use the idea, so it never repeats the hook or the prediction.
+- "missions": 2 or 3 challenges played in the experiment after the guided tour, from easy to harder, each asking to
+  bring one measurement into a range by changing the controls. A mission makes the learner use the idea (not luck),
+  and its range must not include the measurement's value with the default settings.
+- "illustrations": two concrete scenes from the learner's daily life where they live (people, objects, place, light),
+  described in one or two English sentences each. No text, letters, numbers or diagrams in the scenes.
 - "homeExperiment": a real experiment the learner can do at home in 2 minutes and film, where ONE clearly visible
   object moves in a way that shows the lesson's law (a ball that falls or rolls, a pendulum made of string, an object
   that floats). Only safe, cheap, common objects: no fire, no mains electricity, no sharp tools, no chemicals.
@@ -295,6 +306,47 @@ const shuffle = <T>(items: T[]): T[] => {
     [result[index], result[other]] = [result[other], result[index]];
   }
   return result;
+};
+
+const GRID_STEPS = 12;
+
+/**
+ * Keeps only missions that can really be won: the controls are swept on a grid and a mission is kept if some
+ * setting brings its measurement into range (and the default setting does not already win it).
+ */
+const reachableMissions = (raw: unknown, plan: LessonPlan): Mission[] => {
+  const { parameters, measurements } = plan.simulation;
+  const formulas = new Map(measurements.map((m) => [m.name, m.formula]));
+  const candidates = (Array.isArray(raw) ? raw : []).slice(0, 4) as Array<Partial<Mission>>;
+  const axes = parameters.map((p) =>
+    p.min === 0 && p.max === 1 && p.step === 1 ? [0, 1] : Array.from({ length: GRID_STEPS + 1 }, (_, i) => p.min + ((p.max - p.min) * i) / GRID_STEPS),
+  );
+  // Every combination of the grid (small: at most 4 controls).
+  const settings = axes.reduce<Array<Record<string, number>>>(
+    (combinations, values, index) => combinations.flatMap((combination) => values.map((value) => ({ ...combination, [parameters[index].name]: value }))),
+    [{}],
+  );
+  const defaults = Object.fromEntries(parameters.map((p) => [p.name, p.default]));
+
+  return candidates
+    .filter((mission) => typeof mission.goal === 'string' && typeof mission.measurement === 'string' && formulas.has(mission.measurement))
+    .map((mission) => ({
+      goal: mission.goal!.slice(0, 160),
+      measurement: mission.measurement!,
+      min: Math.min(Number(mission.min), Number(mission.max)),
+      max: Math.max(Number(mission.min), Number(mission.max)),
+      success: String(mission.success ?? '').slice(0, 200),
+    }))
+    .filter((mission) => {
+      if (!Number.isFinite(mission.min) || !Number.isFinite(mission.max)) return false;
+      const formula = formulas.get(mission.measurement)!;
+      const inRange = (setting: Record<string, number>) => {
+        const value = evaluate(formula, setting);
+        return Number.isFinite(value) && value >= mission.min && value <= mission.max;
+      };
+      return !inRange(defaults) && settings.some(inRange);
+    })
+    .slice(0, 3);
 };
 
 /** Keeps a well-formed exercise of one kind, or nothing: a broken exercise is worse than none. */
@@ -432,6 +484,12 @@ export const parsePlan = (text: string): LessonPlan => {
   simulation.dimension = simulation.dimension === '3d' ? '3d' : '2d';
   plan.homeExperiment = normalizeHomeExperiment(plan.homeExperiment);
   plan.exercise = normalizeExercise(plan.exercise);
+  plan.missions = reachableMissions(plan.missions, plan);
+  const scenes = plan.illustrations;
+  plan.illustrations =
+    scenes && typeof scenes.hook === 'string' && typeof scenes.summary === 'string'
+      ? { hook: scenes.hook.slice(0, 400), summary: scenes.summary.slice(0, 400) }
+      : undefined;
   plan.steps = normalizeSteps(plan.steps, plan);
 
   // Models tend to put the right answer first: shuffle so its position teaches nothing.

@@ -106,6 +106,16 @@ export type Exercise = {
   | { kind: 'explain'; expected: string }
 );
 
+/** A challenge in the experiment: bring one measurement into a range by changing the controls. */
+export interface Mission {
+  goal: string;
+  measurement: string;
+  min: number;
+  max: number;
+  /** Shown after it is reached: what the learner just discovered. */
+  success: string;
+}
+
 /** Verdict on a learner's written answer to an "explain" exercise. */
 export interface AnswerCheck {
   correct: boolean;
@@ -133,6 +143,10 @@ export interface LessonPlan {
   summary: string;
   /** Null when no safe experiment with a trackable object fits the lesson. */
   homeExperiment?: HomeExperiment | null;
+  /** Scenes for Muse Image: one for the opening question, one for what to remember. */
+  illustrations?: { hook: string; summary: string };
+  /** Challenges played in the experiment, each proven reachable before it is kept. */
+  missions?: Mission[];
   simulation: {
     /** 3D only when depth or rotation is essential to understand the idea. */
     dimension?: '2d' | '3d';
