@@ -1,5 +1,6 @@
 // 2D renderer: a canvas drawn every frame through the helpers of `g` (world units, y up, origin bottom-left).
 import { COLORS } from './core.js';
+import { drawIcon } from './icons.js';
 import { drawLabels } from './labels.js';
 
 export function createRenderer2d(options) {
@@ -192,6 +193,57 @@ export function createRenderer2d(options) {
       context.globalAlpha = 1;
       stroke({ width: 2, color: COLORS.accent, dash: true });
       context.stroke();
+    },
+    icon(name, x, y, size, o = {}) {
+      drawIcon(context, name, X(x), Y(y), X(size), o);
+      if (!o.background) addObstacle(X(x - size / 2), Y(y + size / 2), X(size), X(size));
+    },
+    items(name, count, x, y, w, h, o = {}) {
+      // Countable things in a neat grid, in reading order: `count` drawn, the rest of `total` as empty outlines.
+      const filled = Math.max(0, Math.round(count));
+      const slots = Math.min(60, Math.max(filled, Math.round(o.total || 0)));
+      if (!slots) return;
+      let best = { cols: 1, cell: 0 };
+      for (let cols = 1; cols <= slots; cols++) {
+        const cell = Math.min(w / cols, h / Math.ceil(slots / cols));
+        if (cell > best.cell) best = { cols, cell };
+      }
+      const rows = Math.ceil(slots / best.cols);
+      const left = x + (w - best.cols * best.cell) / 2;
+      const top = y + h - (h - rows * best.cell) / 2;
+      const crossedFrom = filled - Math.max(0, Math.round(o.crossed || 0));
+      for (let i = 0; i < Math.min(slots, 60); i++) {
+        const cx = left + ((i % best.cols) + 0.5) * best.cell;
+        const cy = top - (Math.floor(i / best.cols) + 0.5) * best.cell;
+        drawIcon(context, name, X(cx), Y(cy), X(best.cell * 0.82), { ...o, ghost: i >= filled, crossed: i < filled && i >= crossedFrom });
+      }
+      if (!o.background) addObstacle(X(left), Y(top), X(best.cols * best.cell), X(rows * best.cell));
+    },
+    bar(x, y, w, h, o = {}) {
+      // A quantity as a bar on a shared scale: a light track for the whole scale, the value in color, and its name
+      // written just above the left end, so it never needs a leader line.
+      const full = o.full === undefined ? w : o.full;
+      if (o.full !== undefined) {
+        context.beginPath();
+        if (context.roundRect) context.roundRect(X(x), Y(y + h), X(full), X(h), 6);
+        else context.rect(X(x), Y(y + h), X(full), X(h));
+        context.fillStyle = COLORS.line;
+        context.fill();
+      }
+      if (w > 0) {
+        context.beginPath();
+        if (context.roundRect) context.roundRect(X(x), Y(y + h), X(Math.max(w, 0)), X(h), 6);
+        else context.rect(X(x), Y(y + h), X(Math.max(w, 0)), X(h));
+        context.fillStyle = o.color || COLORS.accent;
+        context.fill();
+      }
+      if (o.label) {
+        context.font = '600 12px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+        context.fillStyle = COLORS.ink;
+        context.textBaseline = 'bottom';
+        context.fillText(String(o.label), X(x), Y(y + h) - 4);
+      }
+      addObstacle(X(x), Y(y + h) - 20, X(Math.max(full, w)), X(h) + 20);
     },
     label(text, x, y, o = {}) {
       labels.push({ text: String(text), ax: X(x), ay: Y(y), color: o.color || COLORS.ink, priority: o.priority || 0 });

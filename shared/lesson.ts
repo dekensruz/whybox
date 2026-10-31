@@ -11,11 +11,24 @@ export interface LearnerMemory {
   adapt: 'simpler' | 'same' | 'deeper';
 }
 
+/** A step the learner solves alone: bring one measurement into a range by moving the controls. */
+export interface StepChallenge {
+  question: string;
+  /** The controls the learner must change; the others start at the step's values, the givens of the question. */
+  find: string[];
+  measurement: string;
+  min: number;
+  max: number;
+}
+
 export interface TourStep {
   title: string;
+  /** For a challenge, shown once the learner has found it: what they found and why. */
   text: string;
   observe: string;
+  /** The step's state; for a challenge, one solution, applied only if the learner asks to be shown. */
   parameters: Record<string, number>;
+  challenge?: StepChallenge;
 }
 
 /** A short guided tour built against one wrong idea of the learner. */
@@ -143,8 +156,8 @@ export interface LessonPlan {
   summary: string;
   /** Null when no safe experiment with a trackable object fits the lesson. */
   homeExperiment?: HomeExperiment | null;
-  /** Scenes for Muse Image: one for the opening question, one for what to remember. */
-  illustrations?: { hook: string; summary: string };
+  /** Scenes for Muse Image: the opening question, what to remember, each key word and the exercise. */
+  illustrations?: { hook: string; summary: string; concepts?: string[]; exercise?: string };
   /** Challenges played in the experiment, each proven reachable before it is kept. */
   missions?: Mission[];
   simulation: {

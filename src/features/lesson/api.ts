@@ -1,5 +1,6 @@
 import type { AnswerCheck, CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
 import type { Profile } from '@/features/profile/types';
+import type { IllustrationKind } from './types';
 
 export class ApiError extends Error {
   constructor(readonly status: number) {
@@ -69,7 +70,7 @@ export const transcribe = async (wav: Blob) => {
   return ((await response.json()) as { text: string }).text;
 };
 
-export const requestIllustration = (scene: string, kind: 'hook' | 'summary') =>
+export const requestIllustration = (scene: string, kind: IllustrationKind) =>
   post<{ image: string }>('/api/lessons/illustrations', { scene, kind }).then((result) => result.image);
 
 export const checkAnswer = (plan: LessonPlan, learner: LearnerContext, answer: string, attempt: number) =>
