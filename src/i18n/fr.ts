@@ -139,6 +139,12 @@ export const fr = {
     empty: 'Vos leçons apparaîtront ici.',
     signOut: 'Se déconnecter',
   },
+  voice: {
+    speak: 'Parler',
+    stop: 'Terminer',
+    transcribing: 'Whybox écoute…',
+    error: 'Le micro n’a pas fonctionné. Vérifiez l’autorisation, ou écrivez.',
+  },
   nav: {
     home: 'Accueil',
     lessons: 'Leçons',
@@ -290,6 +296,16 @@ export const fr = {
     lastTry: 'Encore un essai, ou regardez la solution.',
     stepChanged: 'Vous avez changé les réglages : le texte décrit l’étape d’origine.',
     backToStep: 'Revenir à l’étape',
+    missionsLabel: 'Missions',
+    missionsIntro: 'À vous de jouer : réglez l’expérience pour réussir chaque mission.',
+    missionOf: 'Mission {current} sur {total}',
+    missionReached: 'Mission réussie',
+    missionsDone: 'Toutes les missions sont réussies.',
+    missionNow: 'Valeur actuelle : {value}',
+    soundOn: 'Couper le son',
+    soundOff: 'Activer le son',
+    fullscreen: 'Plein écran',
+    exitFullscreen: 'Quitter le plein écran',
   },
   options: {
     interests: {

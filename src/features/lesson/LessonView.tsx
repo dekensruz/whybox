@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { useI18n } from '@/i18n';
 import { cx } from '@/lib/cx';
+import { chime, setSoundEnabled, soundEnabled } from '@/lib/sound';
 import { ExerciseCard, type ExerciseResult } from './ExerciseCard';
+import { MissionsPanel } from './MissionsPanel';
 import { RealExperiment } from './real/RealExperiment';
 import { SimulationFrame } from './SimulationFrame';
 import type { LessonOutcome, Verification } from './types';
@@ -37,6 +39,17 @@ interface LessonViewProps {
   realExperiment?: RealExperimentResult & { objectSizeCm: number };
   onRealResult: (result: RealExperimentResult & { objectSizeCm: number }) => void;
   onExercise: (result: ExerciseResult) => void;
+  /** Object URLs of the lesson's Muse Image illustrations, when they are ready. */
+  illustrations: { hook?: string; summary?: string };
+}
+
+/** An illustration that fades in when it arrives, keeping its place so the card does not jump. */
+function Illustration({ src }: { src?: string }) {
+  return (
+    <div className="aspect-[3/2] w-full overflow-hidden rounded-2xl bg-surface">
+      {src && <img src={src} alt="" className="h-full w-full animate-[fade-in_0.6s_ease-out] object-cover" />}
+    </div>
+  );
 }
 
 type TourEntry = TourStep & { againstIdea: boolean };
@@ -46,6 +59,7 @@ type Slide =
   | { kind: 'predict' }
   | { kind: 'reveal' }
   | { kind: 'step'; index: number }
+  | { kind: 'missions' }
   | { kind: 'concept'; index: number }
   | { kind: 'example' }
   | { kind: 'summary' }
@@ -63,7 +77,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
  */
 export function LessonView(props: LessonViewProps) {
   const { plan, html, verification, language, preparation, outcome, counter, onPredict, onTourComplete, onUnderstanding } = props;
-  const { learner, realExperiment, onRealResult, onExercise } = props;
+  const { learner, realExperiment, onRealResult, onExercise, illustrations } = props;
   const { t } = useI18n();
   const navigate = useNavigate();
   const [choice, setChoice] = useState<number | null>(outcome?.chosen ?? null);
@@ -86,6 +100,7 @@ export function LessonView(props: LessonViewProps) {
       { kind: 'predict' },
       { kind: 'reveal' },
       ...tour.map((_, step): Slide => ({ kind: 'step', index: step })),
+      ...(plan.missions?.length ? [{ kind: 'missions' } as Slide] : []),
       ...plan.concepts.map((_, concept): Slide => ({ kind: 'concept', index: concept })),
       ...(plan.exercise || plan.example ? [{ kind: 'example' } as Slide] : []),
       { kind: 'summary' },
@@ -112,14 +127,49 @@ export function LessonView(props: LessonViewProps) {
 
   // The step text describes the step's own values: notice when the learner's values no longer match it.
   const [liveValues, setLiveValues] = useState<Record<string, number> | null>(null);
+  const [liveMeasures, setLiveMeasures] = useState<Record<string, number> | null>(null);
   const settle = useRef<number | undefined>(undefined);
-  const onValues = useCallback((values: Record<string, number>) => {
+  const onValues = useCallback((values: Record<string, number>, measures: Record<string, number>) => {
+    setLiveMeasures(measures);
     window.clearTimeout(settle.current);
     settle.current = window.setTimeout(() => setLiveValues(values), 400);
   }, []);
   const leftStep =
     liveValues !== null &&
     Object.entries(stepState).some(([name, value]) => name in liveValues && Math.abs(liveValues[name] - value) > Math.max(1e-6, Math.abs(value) * 1e-3));
+
+  // Missions start from the experiment's default settings, which the server checked do not already win them.
+  // They are played in order, and only count once the experiment changes on the missions card.
+  const missions = plan.missions ?? [];
+  const [reached, setReached] = useState(0);
+  const onMissions = useRef(false);
+  onMissions.current = slide.kind === 'missions';
+  useEffect(() => {
+    const mission = missions[reached];
+    const value = liveMeasures?.[mission?.measurement ?? ''];
+    if (!onMissions.current || !mission || value === undefined || value < mission.min || value > mission.max) return;
+    chime(reached === missions.length - 1);
+    setReached(reached + 1);
+  }, [liveMeasures]);
+
+  const [sound, setSound] = useState(soundEnabled);
+  const toggleSound = () => {
+    setSoundEnabled(!sound);
+    setSound(!sound);
+  };
+  const fullscreenSupported = typeof document !== 'undefined' && document.fullscreenEnabled;
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFullscreen = () => {
+    const request = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+    request.catch(() => {
+      /* the browser refused: the lesson stays as it is */
+    });
+  };
 
   useEffect(() => {
     if (slide.kind === 'step' && slide.index === tour.length - 1 && outcome && !outcome.tourCompleted) onTourComplete();
@@ -184,7 +234,7 @@ export function LessonView(props: LessonViewProps) {
           : t('lesson.next');
   const primaryDisabled = slide.kind === 'end' ? false : slide.kind === 'predict' && !outcome ? choice === null : !canGoForward;
   const onPrimary = () => (slide.kind === 'end' ? navigate('/') : forward());
-  const isStep = slide.kind === 'step';
+  const isStep = slide.kind === 'step' || slide.kind === 'missions';
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -211,6 +261,34 @@ export function LessonView(props: LessonViewProps) {
             <span key={position} className={cx('h-1 flex-1 rounded-full transition-colors', position <= index ? 'bg-ink' : 'bg-line')} />
           ))}
         </div>
+        <button
+          type="button"
+          onClick={toggleSound}
+          className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted hover:text-ink"
+          aria-label={sound ? t('lesson.soundOn') : t('lesson.soundOff')}
+          aria-pressed={sound}
+        >
+          <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M3.5 7.5h2.5L10 4.5v11l-4-3H3.5z" />
+            {sound ? <path d="M13 7.5a3.5 3.5 0 0 1 0 5M15.5 5.5a6.5 6.5 0 0 1 0 9" /> : <path d="m13 8 4 4m0-4-4 4" />}
+          </svg>
+        </button>
+        {fullscreenSupported && (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="-mr-2 flex size-10 shrink-0 items-center justify-center rounded-full text-muted hover:text-ink"
+            aria-label={fullscreen ? t('lesson.exitFullscreen') : t('lesson.fullscreen')}
+          >
+            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {fullscreen ? (
+                <path d="M7.5 3.5v4h-4M12.5 3.5v4h4M7.5 16.5v-4h-4M12.5 16.5v-4h4" />
+              ) : (
+                <path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4" />
+              )}
+            </svg>
+          </button>
+        )}
       </header>
 
       <main
@@ -222,9 +300,21 @@ export function LessonView(props: LessonViewProps) {
         {html && (
           <div className={cx(isStep ? 'grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start' : 'hidden')}>
             <div className="order-2 lg:order-1">
-              <SimulationFrame html={html} plan={plan} language={language} state={stepState} onValues={onValues} />
+              <SimulationFrame html={html} plan={plan} language={language} state={slide.kind === 'missions' ? defaults : stepState} onValues={onValues} sound={sound} />
             </div>
-            {isStep && (
+            {slide.kind === 'missions' && (
+              <div key={index} className={cx('order-1 flex flex-col gap-3 lg:order-2 lg:sticky lg:top-24', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
+                <Eyebrow>{t('lesson.missionsLabel')}</Eyebrow>
+                <MissionsPanel
+                  missions={missions}
+                  measurements={plan.simulation.measurements}
+                  measures={liveMeasures}
+                  reached={reached}
+                  language={language}
+                />
+              </div>
+            )}
+            {slide.kind === 'step' && (
               <div key={index} className={cx('order-1 flex flex-col gap-3 lg:order-2 lg:sticky lg:top-24', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
                 <Eyebrow>
                   {step.againstIdea && <span className="text-ink">{t('lesson.testIdeaLabel')} · </span>}
@@ -259,7 +349,8 @@ export function LessonView(props: LessonViewProps) {
         {!isStep && (
           <div key={index} className={cx('flex flex-1 flex-col', direction === 'forward' ? 'slide-from-right' : 'slide-from-left')}>
             {slide.kind === 'hook' && (
-              <div className="flex flex-1 flex-col justify-center gap-4 py-10">
+              <div className="flex flex-1 flex-col justify-center gap-4 py-6">
+                {plan.illustrations && <Illustration src={illustrations.hook} />}
                 <Eyebrow>{plan.title}</Eyebrow>
                 <h1 className="text-[32px] font-semibold leading-[1.15] tracking-tight text-balance lg:text-[40px]">{plan.hook}</h1>
                 <p className="text-sm text-subtle">{t('lesson.swipeHint')}</p>
@@ -325,7 +416,8 @@ export function LessonView(props: LessonViewProps) {
             )}
 
             {slide.kind === 'summary' && (
-              <div className="flex flex-1 flex-col justify-center gap-5 py-10">
+              <div className="flex flex-1 flex-col justify-center gap-5 py-6">
+                {plan.illustrations && <Illustration src={illustrations.summary} />}
                 <Eyebrow>{t('lesson.summaryLabel')}</Eyebrow>
                 <p className="border-l-4 border-accent pl-5 text-[26px] font-semibold leading-snug tracking-tight text-balance">{plan.summary}</p>
               </div>

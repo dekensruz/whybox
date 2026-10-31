@@ -1,6 +1,8 @@
 import type { CounterTour, LessonPlan, RealExperimentResult, Understanding } from '@shared/lesson';
 
-export type LessonStatus = 'planning' | 'building' | 'verifying' | 'ready' | 'failed';
+export type IllustrationKind = 'hook' | 'summary';
+
+export type LessonStatus ='planning' | 'building' | 'verifying' | 'ready' | 'failed';
 
 export interface Verification {
   passed: number;
@@ -34,6 +36,8 @@ export interface Lesson {
   outcome?: LessonOutcome;
   /** Tour built against the learner's wrong prediction; null when it could not be built. */
   counter?: CounterTour | null;
+  /** Illustrations already generated and stored on the device (images live in IndexedDB). */
+  illustrated?: Partial<Record<IllustrationKind, boolean>>;
   /** Result of the real experiment the learner filmed (the video itself is never stored). */
   realExperiment?: RealExperimentResult & { objectSizeCm: number };
 }

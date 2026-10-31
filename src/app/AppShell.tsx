@@ -14,16 +14,17 @@ const NAV: Array<{ to: string; label: MessageKey; icon: ComponentType<{ classNam
 
 /**
  * The frame of the signed-in app: a side menu on large screens, a bottom bar on phones.
- * Inside a lesson the bottom bar steps aside, so the learner stays focused on it.
+ * Inside a lesson both step aside, so the learner stays focused on it; the lesson has its own way out.
  */
 export function AppShell() {
   const { t } = useI18n();
   const { pathname } = useLocation();
   const inLesson = pathname.startsWith('/lesson/');
+  const playingLesson = inLesson && !pathname.startsWith('/lesson/new/');
 
   return (
     <div className="min-h-dvh lg:flex">
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-8 border-r border-line bg-surface px-5 py-6 lg:flex">
+      <aside className={cx('sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-8 border-r border-line bg-surface px-5 py-6', !playingLesson && 'lg:flex')}>
         <Logo />
         <NavLink
           to="/lesson/new/question"

@@ -11,12 +11,15 @@ interface SimulationFrameProps {
   language: string;
   /** Parameter values the experiment is driven to, e.g. by the current step of the guided tour. */
   state?: Record<string, number>;
-  /** Called with the experiment's values whenever they change, including when the learner moves a control. */
-  onValues?: (values: Record<string, number>) => void;
+  /** Called with the experiment's values and measurements whenever they change, including when the learner moves a control. */
+  onValues?: (values: Record<string, number>, measures: Record<string, number>) => void;
+  /** Whether the experiment may play its sound cues. */
+  sound?: boolean;
+  className?: string;
 }
 
 /** Displays a generated experiment in a sandbox that can run scripts but cannot reach the app. */
-export function SimulationFrame({ html, plan, language, state, onValues }: SimulationFrameProps) {
+export function SimulationFrame({ html, plan, language, state, onValues, sound = true, className }: SimulationFrameProps) {
   const valuesListener = useRef(onValues);
   valuesListener.current = onValues;
   const frame = useRef<HTMLIFrameElement>(null);
@@ -44,10 +47,10 @@ export function SimulationFrame({ html, plan, language, state, onValues }: Simul
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
-      const data = event.data as { whyboxHeight?: number; whyboxValues?: Record<string, number> };
+      const data = event.data as { whyboxHeight?: number; whyboxValues?: Record<string, number>; whyboxMeasures?: Record<string, number> };
       const reported = Number(data?.whyboxHeight);
       if (reported > 0) setHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, reported)));
-      if (data?.whyboxValues && typeof data.whyboxValues === 'object') valuesListener.current?.(data.whyboxValues);
+      if (data?.whyboxValues && typeof data.whyboxValues === 'object') valuesListener.current?.(data.whyboxValues, data.whyboxMeasures ?? {});
     };
     window.addEventListener('message', onMessage);
     bridge.current = frame.current ? new SimulationBridge(frame.current) : null;
@@ -76,6 +79,10 @@ export function SimulationFrame({ html, plan, language, state, onValues }: Simul
     };
   }, [loaded, state]);
 
+  useEffect(() => {
+    if (loaded) frame.current?.contentWindow?.postMessage({ whyboxSound: sound }, '*');
+  }, [loaded, sound]);
+
   return (
     <iframe
       ref={frame}
@@ -84,7 +91,7 @@ export function SimulationFrame({ html, plan, language, state, onValues }: Simul
       srcDoc={source ?? ''}
       onLoad={() => source && setLoaded(true)}
       style={{ height }}
-      className="w-full rounded-2xl border border-line bg-paper"
+      className={`w-full rounded-2xl border border-line bg-paper ${className ?? ''}`}
     />
   );
 }

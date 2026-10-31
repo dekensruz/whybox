@@ -3,6 +3,7 @@ import type { Exercise, LearnerContext, LessonPlan } from '@shared/lesson';
 import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { TextAreaField, TextField } from '@/components/ui/Field';
+import { VoiceButton } from '@/components/VoiceButton';
 import { useI18n } from '@/i18n';
 import { checkAnswer } from './api';
 
@@ -98,14 +99,17 @@ export function ExerciseCard({ plan, exercise, learner, onDone }: ExerciseCardPr
           />
         )}
         {exercise.kind === 'explain' && (
-          <TextAreaField
-            label={t('lesson.answerLabel')}
-            placeholder={t('lesson.answerPlaceholder')}
-            maxLength={600}
-            value={answer}
-            disabled={solved}
-            onChange={(event) => setAnswer(event.target.value)}
-          />
+          <>
+            <TextAreaField
+              label={t('lesson.answerLabel')}
+              placeholder={t('lesson.answerPlaceholder')}
+              maxLength={600}
+              value={answer}
+              disabled={solved}
+              onChange={(event) => setAnswer(event.target.value)}
+            />
+            {!solved && <VoiceButton onText={(spoken) => setAnswer((current) => (current.trim() ? `${current.trim()} ${spoken}` : spoken))} />}
+          </>
         )}
 
         {checking && <p className="text-sm text-muted">{t('lesson.checking')}</p>}

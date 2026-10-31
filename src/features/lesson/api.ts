@@ -63,6 +63,15 @@ export const analyseRealExperiment = async (
   });
 };
 
+export const transcribe = async (wav: Blob) => {
+  const response = await fetch('/api/voice/transcribe', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+  if (!response.ok) throw new ApiError(response.status);
+  return ((await response.json()) as { text: string }).text;
+};
+
+export const requestIllustration = (scene: string, kind: 'hook' | 'summary') =>
+  post<{ image: string }>('/api/lessons/illustrations', { scene, kind }).then((result) => result.image);
+
 export const checkAnswer = (plan: LessonPlan, learner: LearnerContext, answer: string, attempt: number) =>
   post<AnswerCheck>('/api/lessons/check', { plan, learner, answer, attempt });
 

@@ -141,6 +141,12 @@ export const en: Messages = {
     empty: 'Your lessons will appear here.',
     signOut: 'Sign out',
   },
+  voice: {
+    speak: 'Speak',
+    stop: 'Done',
+    transcribing: 'Whybox is listening…',
+    error: 'The microphone did not work. Check the permission, or type.',
+  },
   nav: {
     home: 'Home',
     lessons: 'Lessons',
@@ -292,6 +298,16 @@ export const en: Messages = {
     lastTry: 'One more try, or look at the solution.',
     stepChanged: 'You changed the settings: the text describes the original step.',
     backToStep: 'Back to the step',
+    missionsLabel: 'Missions',
+    missionsIntro: 'Your turn: set the experiment to complete each mission.',
+    missionOf: 'Mission {current} of {total}',
+    missionReached: 'Mission complete',
+    missionsDone: 'All missions complete.',
+    missionNow: 'Current value: {value}',
+    soundOn: 'Mute sound',
+    soundOff: 'Turn sound on',
+    fullscreen: 'Full screen',
+    exitFullscreen: 'Exit full screen',
   },
   options: {
     interests: {
