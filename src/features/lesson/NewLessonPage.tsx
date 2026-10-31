@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { BackButton } from '@/components/BackButton';
 import { Screen } from '@/components/Screen';
+import { VoiceButton } from '@/components/VoiceButton';
 import { Button } from '@/components/ui/Button';
 import { TextAreaField } from '@/components/ui/Field';
 import { useI18n } from '@/i18n';
@@ -87,6 +88,7 @@ export function NewLessonPage() {
           value={text}
           onChange={(event) => setText(event.target.value)}
         />
+        <VoiceButton onText={(spoken) => setText((current) => (current.trim() ? `${current.trim()} ${spoken}` : spoken))} />
       </div>
     </Screen>
   );

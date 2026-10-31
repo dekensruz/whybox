@@ -6,6 +6,7 @@ import { Logo } from '@/components/Logo';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import { TextField } from '@/components/ui/Field';
+import { PasswordField } from '@/components/ui/PasswordField';
 import { useI18n } from '@/i18n';
 import { CodeForm } from './CodeForm';
 import { ErrorMessage } from './ErrorMessage';
@@ -30,6 +31,7 @@ export function AuthPage() {
   const [view, setView] = useState<View>(params.get('mode') === 'signin' ? 'signin' : 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AuthErrorKind | null>(null);
 
@@ -125,6 +127,8 @@ export function AuthPage() {
   }
 
   const isSignUp = view === 'signup';
+  // Only flag a mismatch once the confirmation is as long as the password, not while it is being typed.
+  const passwordsDiffer = confirmation.length >= password.length && confirmation.length > 0 && confirmation !== password;
 
   return (
     <Screen header={header}>
@@ -145,9 +149,8 @@ export function AuthPage() {
             <form onSubmit={submitCredentials} className="flex flex-col gap-4">
               <EmailField value={email} onChange={setEmail} />
               <div className="flex flex-col gap-2">
-                <TextField
+                <PasswordField
                   label={t('auth.passwordLabel')}
-                  type="password"
                   required
                   minLength={isSignUp ? MIN_PASSWORD_LENGTH : undefined}
                   autoComplete={isSignUp ? 'new-password' : 'current-password'}
@@ -162,8 +165,24 @@ export function AuthPage() {
                   </button>
                 )}
               </div>
+              {isSignUp && (
+                <div className="flex flex-col gap-2">
+                  <PasswordField
+                    label={t('auth.confirmPasswordLabel')}
+                    required
+                    autoComplete="new-password"
+                    value={confirmation}
+                    onChange={(event) => setConfirmation(event.target.value)}
+                  />
+                  {passwordsDiffer && (
+                    <p role="alert" className="text-sm text-danger">
+                      {t('auth.passwordMismatch')}
+                    </p>
+                  )}
+                </div>
+              )}
               <ErrorMessage kind={error} />
-              <Button block type="submit" disabled={busy}>
+              <Button block type="submit" disabled={busy || (isSignUp && confirmation !== password)}>
                 {isSignUp ? t('auth.signUpSubmit') : t('auth.signInSubmit')}
               </Button>
             </form>

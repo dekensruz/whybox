@@ -2,7 +2,7 @@
 // every measurement with the formula of the lesson, before a learner ever sees it.
 import { evaluate } from '@shared/expression';
 import type { CheckFailure, LessonPlan } from '@shared/lesson';
-import { SimulationBridge, withBridge } from './simulationBridge';
+import { prepareExperiment, SimulationBridge } from './simulationBridge';
 
 const RELATIVE_TOLERANCE = 0.02;
 const RANDOM_CASES = 3;
@@ -11,6 +11,8 @@ export interface VerificationResult {
   passed: number;
   total: number;
   failures: CheckFailure[];
+  /** JPEG data URLs of the experiment at rest and at each step, taken only when every check passed. */
+  snapshots: string[];
 }
 
 const snap = (value: number, min: number, step: number) => Number((Math.round((value - min) / step) * step + min).toFixed(6));
@@ -43,18 +45,20 @@ const matches = (expected: number, received: unknown) =>
   Math.abs(received - expected) <= Math.max(1e-6, RELATIVE_TOLERANCE * Math.abs(expected));
 
 /** Loads the experiment in an invisible sandboxed frame and runs every check. */
-export const verifySimulation = async (plan: LessonPlan, html: string): Promise<VerificationResult> => {
+export const verifySimulation = async (plan: LessonPlan, html: string, language: string): Promise<VerificationResult> => {
   const frame = document.createElement('iframe');
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('aria-hidden', 'true');
-  frame.style.cssText = 'position:fixed;left:-10000px;top:0;width:360px;height:720px;border:0;';
+  // Kept inside the viewport but invisible: browsers pause animations in frames placed off-screen.
+  frame.style.cssText = 'position:fixed;left:0;top:0;width:380px;height:900px;border:0;opacity:0;pointer-events:none;z-index:-1;';
   const bridge = new SimulationBridge(frame);
   const loaded = new Promise((resolve) => frame.addEventListener('load', resolve, { once: true }));
-  frame.srcdoc = withBridge(html);
+  frame.srcdoc = await prepareExperiment(html, plan, language);
   document.body.appendChild(frame);
 
   const failures: CheckFailure[] = [];
   let total = 0;
+  let snapshots: string[] = [];
   try {
     await loaded;
     await bridge.ready();
@@ -71,6 +75,7 @@ export const verifySimulation = async (plan: LessonPlan, html: string): Promise<
         }
       }
     }
+    if (failures.length === 0) snapshots = await captureTour(plan, bridge);
   } catch (error) {
     // An experiment that cannot be driven at all fails every check.
     const defaults = Object.fromEntries(plan.simulation.parameters.map((p) => [p.name, p.default]));
@@ -80,5 +85,28 @@ export const verifySimulation = async (plan: LessonPlan, html: string): Promise<
     bridge.dispose();
     frame.remove();
   }
-  return { passed: Math.max(0, total - failures.length), total, failures };
+  return { passed: Math.max(0, total - failures.length), total, failures, snapshots };
+};
+
+const SETTLE_MS = 900;
+const MAX_SNAPSHOTS = 5;
+
+/** Pictures of the experiment at each step of the guided tour, for the visual review. */
+const captureTour = async (plan: LessonPlan, bridge: SimulationBridge): Promise<string[]> => {
+  // Pictures need the page on screen: a hidden tab does not draw its frames.
+  if (document.hidden) return [];
+  const defaults = Object.fromEntries(plan.simulation.parameters.map((p) => [p.name, p.default]));
+  const states = [defaults, ...plan.steps.map((step) => ({ ...defaults, ...step.parameters }))].slice(0, MAX_SNAPSHOTS);
+  const snapshots: string[] = [];
+  try {
+    for (const state of states) {
+      for (const [name, value] of Object.entries(state)) await bridge.call('set', [name, value]);
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+      snapshots.push(await bridge.call<string>('snapshot', [], 15000));
+    }
+  } catch {
+    // Some browsers cannot take the pictures: the visual review is then skipped.
+    return [];
+  }
+  return snapshots;
 };
