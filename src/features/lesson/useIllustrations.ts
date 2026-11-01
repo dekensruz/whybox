@@ -7,7 +7,7 @@ import { getLesson } from './lessonStore';
 import type { IllustrationKind, Lesson } from './types';
 
 /** Images generated at the same time: enough to be quick, few enough to stay under the API's rate limits. */
-const PARALLEL = 2;
+const PARALLEL = 4;
 const imageKey = (lessonId: string, kind: IllustrationKind) => `${lessonId}:${kind}`;
 
 /** The cards to illustrate, in the order the learner meets them, with their scene. */
@@ -27,6 +27,21 @@ export function useIllustrations(lesson: Lesson | null, update: (patch: Partial<
   const [urls, setUrls] = useState<Partial<Record<IllustrationKind, string>>>({});
   const requested = useRef(new Set<string>());
   const scenes = useMemo(() => scenesOf(lesson?.plan), [lesson?.plan]);
+
+  // The opening card comes first and the lesson takes a while to write: its picture starts from the learner's own
+  // question, at once, so it is ready when the lesson is.
+  const question = lesson?.question?.trim();
+  useEffect(() => {
+    if (!lesson || lesson.plan || !question || lesson.illustrated?.hook) return;
+    const key = imageKey(lesson.id, 'hook');
+    if (requested.current.has(key)) return;
+    requested.current.add(key);
+    requestIllustration(`An everyday scene from a child's life that makes this question visible: ${question.slice(0, 300)}`, 'hook')
+      .then((image) => downscale(image))
+      .then((blob) => saveImage(key, blob))
+      .then(() => update({ illustrated: { ...getLesson(lesson.id)?.illustrated, hook: true } }))
+      .catch(() => requested.current.delete(key));
+  }, [lesson, question, update]);
 
   // Generate what is missing, once per lesson and kind, a few at a time.
   useEffect(() => {

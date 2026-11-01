@@ -21,6 +21,18 @@ const note = (audio: AudioContext, frequency: number, start: number, duration: n
   oscillator.stop(start + duration);
 };
 
+/** Two soft falling notes: "not yet", never harsh. */
+export const miss = () => {
+  if (!soundEnabled()) return;
+  try {
+    context = context ?? new AudioContext();
+    const now = context.currentTime;
+    [392, 329.63].forEach((frequency, index) => note(context!, frequency, now + index * 0.14, 0.35, 0.05));
+  } catch {
+    /* sound is optional */
+  }
+};
+
 /** A rising three-note chime; `grand` adds a fourth, higher note for the last success. */
 export const chime = (grand = false) => {
   if (!soundEnabled()) return;

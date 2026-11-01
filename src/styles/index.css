@@ -13,6 +13,8 @@
   --color-accent: #f2a900;
   --color-accent-soft: #fdf3d8;
   --color-danger: #b42318;
+  --color-positive: #2e7d5b;
+  --color-negative: #b42318;
 }
 
 /* Lesson cards slide in from the side they come from. */
@@ -55,6 +57,25 @@
   animation: slide-from-left 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* A verdict mark pops in, so a right or wrong answer is felt as well as read. */
+@keyframes verdict-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.verdict-pop {
+  animation: verdict-pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
 /* The tutor's halo breathes while it speaks. */
 @keyframes tutor-talk {
   0%,
@@ -75,7 +96,8 @@
 @media (prefers-reduced-motion: reduce) {
   .slide-from-right,
   .slide-from-left,
-  .tutor-talking {
+  .tutor-talking,
+  .verdict-pop {
     animation: none;
   }
 }

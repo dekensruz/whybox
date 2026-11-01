@@ -12,6 +12,8 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
   a trail, a ruler with the distance), so a still picture of each step is clearly different from the others.
 - At most 5 labels of 1 to 3 words each. Never write equations, calculations, sentences or numbers with their
   explanation inside the scene: the measurements already appear in the result cards below the scene.
+- A label names a thing drawn in the scene and is anchored on it. Never label a control or an idea ("Voix",
+  "Où tu regardes"): the controls already have their names below the scene.
 - Labels use words a child knows ("Poids", "Air qui pousse"), never a technical word the lesson's steps have not
   explained, and never jargon such as "air dévié" or "angle d'attaque".
 - Leave free space around objects so labels have room. Never draw text boxes or panels inside the scene.
@@ -23,6 +25,12 @@ const DESIGN_RULES = `Visual quality (this scene is the heart of the lesson, it 
   one scale and start from the same left edge.
 - Lay the scene out on a clear grid: groups aligned, equal gaps, related things side by side, each label right next
   to what it names.
+- It is a game, not a form: every parameter that has a place in the scene (a length, a height, a level, a position,
+  an angle, an amount you could pile up) gets a g.handle on the object itself, so the learner moves the thing, not a
+  slider. Only choices that have no place in the scene stay as controls below it. The handle's track must follow the
+  object's real movement (a rope end moves down as it gets longer, water rises as it fills).
+- Immersion: when the idea happens somewhere (a class, the market, the road, home), set the scene there with
+  g.setting and real people or objects, so the learner feels inside the situation rather than in front of a diagram.
 - Use the kit colors (g.colors). The accent color marks the one thing that matters most.`;
 
 /** Pictograms of the kit (src/features/lesson/runtime/kit/icons.js). */
@@ -30,6 +38,9 @@ const ICON_LIST = [
   'coin', 'banknote', 'bread', 'person', 'child', 'ball', 'stone', 'bottle', 'cup', 'bucket', 'water', 'house', 'tree',
   'plant', 'sun', 'cloud', 'phone', 'battery', 'bulb', 'box', 'bag', 'book', 'car', 'bicycle', 'clock', 'pot', 'fish',
 ].join(', ');
+
+/** Places of the kit (src/features/lesson/runtime/kit/people.js). */
+const SETTING_LIST = ['classroom', 'yard', 'market', 'home', 'road', 'field'].join(', ');
 
 /** The 2D scene kit as the model sees it. The kit itself lives in src/features/lesson/runtime/kit. */
 const KIT_GUIDE_2D = `The page, the controls, the live measurements, the test interface and the smooth transitions are already provided
@@ -72,6 +83,21 @@ Drawing helpers (all positions and sizes in world units; o is an optional option
                                  drawn as a light track), color, label (written just above the bar's left end).
                                  Bars of one scene share one scale and the same x, stacked with gaps of at least 12 units.
                                  Use it instead of g.rect plus g.label for any bar.
+  g.handle(name, x1, y1, x2, y2, o)  lets the learner grab and drag parameter p.<name> right on the object it moves:
+                                 (x1, y1) is where the handle sits at the parameter's minimum, (x2, y2) at its maximum
+                                 (the end of the rope, the top of the water, the sun in the sky, the cart on the road).
+                                 The handle is drawn at the current value and breathes until first touched; the control
+                                 below the scene disappears. o: label (short, names the object), track (false hides the
+                                 dashed path). Call it after drawing the object, at the same place.
+  g.setting(name)                fills the whole scene with a calm place, call it first: ${SETTING_LIST}
+  g.person(x, y, height, o)      a standing person, feet at (x, y). o: mood (-1 sad to 1 happy), look (-1 left to 1
+                                 right), awake (0 dozing to 1), speaking (the mouth moves), raise (0 to 1, a hand goes up),
+                                 color (clothes), seed (a number, gives each person their own look)
+  g.crowd(count, x, y, w, h, o)  seated listeners in rows filling the box. o: attention (0 to 1: the share who listen,
+                                 the others look away or doze), mood (of those who listen), raise (share raising a hand),
+                                 speaking (those who do not listen chat)
+                                 People and crowds are how a situation shows its reactions: drive their mood, attention
+                                 and gestures from the measurements, so the learner sees people react to each choice.
   g.label(text, x, y, o)         short label anchored at (x, y); the kit places it so labels never overlap, with a leader line.
                                  o: color, priority (higher is placed first)
   g.px(n)                        n screen pixels in world units (for fixed-size details)
@@ -95,6 +121,20 @@ WB.app({
   }
 });
 
+Example of a handle (a swing: p.length from 0.5 to 3 metres, the learner pulls the seat down to lengthen the rope):
+WB.app({
+  world: { width: 100, height: 80 },
+  draw(g, p, m, t) {
+    g.setting('yard');
+    var top = 74, scale = 20, swing = 0.5 * Math.sin(t * 2 * Math.PI / m.period);
+    var x = 50 + Math.sin(swing) * p.length * scale, y = top - Math.cos(swing) * p.length * scale;
+    g.line(30, top, 70, top, { width: 6 });
+    g.line(50, top, x, y, { width: 2 });
+    g.rect(x - 5, y - 2, 10, 3, { fill: g.colors.warm, radius: 2 });
+    g.handle('length', 50, top - 0.5 * scale, 50, top - 3 * scale, { label: 'Siège' });
+  }
+});
+
 Example for a quantity lesson (money: price, number bought, money in the pocket):
 WB.app({
   world: { width: 100, height: 70 },
@@ -105,6 +145,19 @@ WB.app({
     g.bar(6, 6, 88 * Math.min(1, m.cost / 2000), 7, { full: 88, color: g.colors.accent, label: 'Coût total' });
     g.label('Pains', 32, 64);
     g.label('Pièces', 79, 64);
+  }
+});
+
+Example for a situation (speaking in front of the class; p.pace and p.eyes are choices in words, m.attention is
+a reaction from 0 to 100):
+WB.app({
+  world: { width: 100, height: 70 },
+  draw(g, p, m, t) {
+    g.setting('classroom');
+    g.person(50, 40, 24, { speaking: true, look: p.eyes === 0 ? -0.8 : 0, mood: 0.5, color: g.colors.accent, seed: 2 });
+    g.crowd(12, 6, 2, 88, 30, { attention: m.attention / 100, mood: m.attention / 100 - 0.2, speaking: m.attention < 40 });
+    g.label('Toi', 50, 66);
+    g.label('La classe', 50, 4);
   }
 });`;
 
@@ -169,9 +222,19 @@ const kitGuide = (plan: LessonPlan) => (plan.simulation.dimension === '3d' ? KIT
 
 const interfaceSpec = (plan: LessonPlan) => {
   const parameters = plan.simulation.parameters
-    .map((p) => `  - p.${p.name}: ${p.label}, ${p.min} to ${p.max} ${p.unit}, default ${p.default}`)
+    .map((p) =>
+      p.levels
+        ? `  - p.${p.name}: ${p.label}, a choice: ${p.levels.map((level, index) => `${index} = ${level}`).join(', ')}, default ${p.default}`
+        : `  - p.${p.name}: ${p.label}, ${p.min} to ${p.max} ${p.unit}, default ${p.default}`,
+    )
     .join('\n');
-  const measurements = plan.simulation.measurements.map((m) => `  - m.${m.name}: ${m.label} (${m.unit}) = ${m.formula}`).join('\n');
+  const measurements = plan.simulation.measurements
+    .map((m) =>
+      m.scale
+        ? `  - m.${m.name}: ${m.label}, a reaction from 0 to ${m.scale.max} (${m.scale.levels.join(' / ')}) = ${m.formula}`
+        : `  - m.${m.name}: ${m.label} (${m.unit}) = ${m.formula}`,
+    )
+    .join('\n');
   return `Parameters (the kit creates their controls):
 ${parameters}
 Measurements (the kit computes and displays them):

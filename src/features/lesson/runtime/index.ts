@@ -16,7 +16,11 @@ export const buildRuntime = async (plan: LessonPlan, language: string): Promise<
   const { parameters, measurements } = plan.simulation;
   const names = parameters.map((parameter) => parameter.name);
   const compiled = measurements
-    .map((m) => `{ name: ${scriptSafe(m.name)}, label: ${scriptSafe(m.label)}, unit: ${scriptSafe(m.unit)}, compute: function (p) { return ${toJavaScript(m.formula, names)}; } }`)
+    .map(
+      (m) =>
+        `{ name: ${scriptSafe(m.name)}, label: ${scriptSafe(m.label)}, unit: ${scriptSafe(m.unit)}, scale: ${scriptSafe(m.scale ?? null)}, ` +
+        `compute: function (p) { return ${toJavaScript(m.formula, names)}; } }`,
+    )
     .join(',\n');
   return `<script>
 window.WHYBOX_SPEC = {
