@@ -222,14 +222,15 @@ Lesson rules:
 - If the learner uses the app in front of a class, phrase things so a teacher can read them aloud to a group.
 - 2 or 3 concepts. 3 to 5 steps.
 - The steps are a tour of the experiment where the learner discovers the idea by acting, not by reading.
-  Each step has a state (its "parameters") that makes one idea visible. The first step sets the most familiar
-  situation and has no challenge. From the second step on, at least two steps are challenges: instead of being shown
-  the state, the learner must find it by moving the controls, e.g. "With 500 francs, how many breads can you buy at
-  most? Move the controls to find out." The step's own parameters must be a solution (the challenge's measurement
-  inside [min, max]). "find" names the controls the learner changes (usually one); the challenge starts with them at
-  the previous step's values and every other control at this step's values, which are the givens stated in the
-  question. That starting state must not already solve it. The challenge question never gives the answer away.
-  Steps without a challenge leave out the "challenge" field.
+  Each step has a state (its "parameters") that makes one idea visible, and EVERY step is a challenge: the learner
+  is never just shown a state, they find it by acting on the experiment, e.g. "With 500 francs, how many breads can
+  you buy at most?". Go from easy to harder, like the levels of a game: the first step is a small, familiar win.
+  The step's own parameters must be a solution (the challenge's measurement inside [min, max]). "find" names the
+  controls the learner changes (usually one); the challenge starts with them at the previous step's values (the
+  default settings for the first step) and every other control at this step's values, which are the givens stated
+  in the question. That starting state must not already solve it. The challenge question never gives the answer away.
+  The teaching order is the one of a great teacher: a question the learner cares about, their own guess, acting to
+  find out, then the words for what they found, then practice on a new situation, then what to remember.
 - The experiment has 2 to 4 parameters and 1 to 3 measurements.
 - "exercise": choose the kind that best makes the learner practise the lesson's idea, like a good teacher would:
   "number" ONLY when the lesson is about quantities (speed, money, current, area); "choice" to spot a mistake,
@@ -365,7 +366,7 @@ Checklist, apply each item to every field:
 6. Check the exercise: its kind fits the lesson (no invented numbers), the answer is right, the arithmetic is right,
    and no hint gives the answer away.
 7. Check the challenges of the steps: each question is clear, never gives the answer away, and the step's parameters
-   really bring its measurement inside [min, max]. Keep at least two challenges from the second step on.
+   really bring its measurement inside [min, max]. Every step keeps its challenge, from easy to harder.
 8. Keep the language: ${languageName(learner.language)}. No emojis, no exclamation marks.
 
 Keep "answerIndex" pointing to the correct option. Keep the formula syntax rules: only parameter names, numbers,
@@ -555,7 +556,7 @@ const normalizeSteps = (steps: TourStep[], plan: LessonPlan): TourStep[] => {
   // the learner always has something to find, and it can be found.
   return tour.map(({ challenge, ...step }, index): TourStep => {
     const formula = formulas.get(String(challenge?.measurement));
-    if (index === 0 || !challenge || typeof challenge.question !== 'string' || !formula) return step;
+    if (!challenge || typeof challenge.question !== 'string' || !formula) return step;
     const min = Math.min(Number(challenge.min), Number(challenge.max));
     const max = Math.max(Number(challenge.min), Number(challenge.max));
     const solves = (state: Record<string, number>) => {
@@ -563,7 +564,8 @@ const normalizeSteps = (steps: TourStep[], plan: LessonPlan): TourStep[] => {
       return Number.isFinite(value) && value >= min && value <= max;
     };
     const find = (Array.isArray(challenge.find) ? challenge.find : []).filter((name) => ranges.has(name));
-    const start = challengeStart(defaults, tour[index - 1].parameters, step.parameters, find);
+    // The first challenge starts from the default settings.
+    const start = challengeStart(defaults, index > 0 ? tour[index - 1].parameters : {}, step.parameters, find);
     if (!Number.isFinite(min) || !Number.isFinite(max) || solves(start) || !solves({ ...defaults, ...step.parameters })) return step;
     return { ...step, challenge: { question: challenge.question.slice(0, 300), find, measurement: challenge.measurement!, min, max } };
   });
