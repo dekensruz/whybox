@@ -55,9 +55,27 @@
   animation: slide-from-left 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* The tutor's halo breathes while it speaks. */
+@keyframes tutor-talk {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.45;
+  }
+}
+
+.tutor-talking {
+  animation: tutor-talk 1.1s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .slide-from-right,
-  .slide-from-left {
+  .slide-from-left,
+  .tutor-talking {
     animation: none;
   }
 }
