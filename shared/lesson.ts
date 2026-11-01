@@ -129,6 +129,18 @@ export interface Mission {
   success: string;
 }
 
+/** What the tutor says aloud on each card of a lesson: written for the ear, warmer and simpler than the text. */
+export interface Narration {
+  hook: string;
+  prediction: string;
+  /** One per step of the lesson's own tour; for a challenge, `found` is said once the learner has found it. */
+  steps: Array<{ intro: string; found?: string }>;
+  concepts: string[];
+  exercise?: string;
+  missions?: string;
+  summary: string;
+}
+
 /** Verdict on a learner's written answer to an "explain" exercise. */
 export interface AnswerCheck {
   correct: boolean;

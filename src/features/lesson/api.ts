@@ -1,4 +1,4 @@
-import type { AnswerCheck, CheckFailure, CounterTour, LearnerContext, LessonPlan, RealExperimentResult } from '@shared/lesson';
+import type { AnswerCheck, CheckFailure, CounterTour, LearnerContext, LessonPlan, Narration, RealExperimentResult } from '@shared/lesson';
 import type { Profile } from '@/features/profile/types';
 import type { IllustrationKind } from './types';
 
@@ -72,6 +72,9 @@ export const transcribe = async (wav: Blob) => {
 
 export const requestIllustration = (scene: string, kind: IllustrationKind) =>
   post<{ image: string }>('/api/lessons/illustrations', { scene, kind }).then((result) => result.image);
+
+export const requestNarration = (plan: LessonPlan, learner: LearnerContext) =>
+  post<{ narration: Narration }>('/api/lessons/narration', { plan, learner }).then((result) => result.narration);
 
 export const checkAnswer = (plan: LessonPlan, learner: LearnerContext, answer: string, attempt: number) =>
   post<AnswerCheck>('/api/lessons/check', { plan, learner, answer, attempt });
