@@ -31,3 +31,6 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Python caches (modal/)
+__pycache__/
