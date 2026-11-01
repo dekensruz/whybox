@@ -138,8 +138,9 @@ export const PLAN_SHAPE = `{
   "simulation": {
     "dimension": "2d or 3d",
     "description": "what the interactive experiment shows, including what is normally invisible",
-    "parameters": [{ "name": "camelCaseId", "label": "...", "unit": "...", "min": 0, "max": 10, "default": 5, "step": 0.5 }],
-    "measurements": [{ "name": "camelCaseId", "label": "...", "unit": "...", "formula": "arithmetic of parameter names" }]
+    "kind": "quantity or situation",
+    "parameters": [{ "name": "camelCaseId", "label": "...", "unit": "...", "min": 0, "max": 10, "default": 5, "step": 0.5, "levels": ["situation only: 2 to 5 choices in words, from 0 to max"] }],
+    "measurements": [{ "name": "camelCaseId", "label": "...", "unit": "...", "formula": "arithmetic of parameter names", "scale": { "max": 100, "levels": ["situation only: 2 to 5 words from low to high"] } }]
   }
 }`;
 
@@ -246,6 +247,14 @@ Lesson rules:
   object moves in a way that shows the lesson's law (a ball that falls or rolls, a pendulum made of string, an object
   that floats). Only safe, cheap, common objects: no fire, no mains electricity, no sharp tools, no chemicals.
   The phone stays still, the object stands out from the background. Use null if no such experiment fits the lesson.
+- "kind": "quantity" when the idea is about measurable quantities (science, math, technology: speed, money, current,
+  time). "situation" when it is about people, behaviour, skills, language, health habits or society (speaking in
+  public, reading aloud, sharing, saving water, making friends): then the experiment is a scene with people who
+  react, never a calculation.
+  For a situation, every parameter is a choice the learner makes, with "levels" in words ("Trop bas", "Bien",
+  "Trop fort"), and every measurement is a reaction with a "scale" ({ "max": 100, "levels": ["Faible", "Moyenne",
+  "Forte"] }) computed by a simple formula that rewards the good choices. Never invent numbers, rates or units for a
+  situation: no "words per minute", no "decibels". The "unit" fields stay empty. The exercise is "choice" or "explain".
 - "dimension": choose "3d" only when depth, rotation or a spatial view is essential to understand the idea
   (the Earth, the Moon and the Sun, seasons, day and night, molecules and crystals, fields around a magnet,
   volumes and solids, light in space). Choose "2d" for everything else: circuits, graphs, forces on a plane, most math.
@@ -410,6 +419,13 @@ const extractJson = (text: string): unknown => {
 };
 
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** 2 to 5 short words or phrases, or null. */
+const words = (value: unknown): string[] | null => {
+  if (!Array.isArray(value)) return null;
+  const list = value.filter((item): item is string => typeof item === 'string' && item.trim() !== '').map((item) => item.trim().slice(0, 30));
+  return list.length >= 2 && list.length <= 5 ? list : null;
+};
 
 const shuffle = <T>(items: T[]): T[] => {
   const result = [...items];
@@ -607,14 +623,33 @@ export const parsePlan = (text: string): LessonPlan => {
     for (const key of ['min', 'max', 'default', 'step'] as const) parameter[key] = Number(parameter[key]);
     if (!(parameter.min <= parameter.default && parameter.default <= parameter.max)) throw new Error(`Invalid range for ${parameter.name}`);
     if (!(parameter.step > 0)) parameter.step = (parameter.max - parameter.min) / 100 || 1;
+    // Choices in words are the integers 0 to n - 1.
+    const levels = words(parameter.levels);
+    if (levels) {
+      parameter.levels = levels;
+      parameter.min = 0;
+      parameter.max = levels.length - 1;
+      parameter.step = 1;
+      parameter.default = Math.min(parameter.max, Math.max(0, Math.round(parameter.default)));
+    } else {
+      delete parameter.levels;
+    }
     defaults[parameter.name] = parameter.default;
   }
   for (const measurement of simulation.measurements) {
     if (!IDENTIFIER.test(measurement.name)) throw new Error(`Invalid measurement name "${measurement.name}"`);
+    const scale = measurement.scale;
+    const scaleLevels = words(scale?.levels);
+    if (scale && Number(scale.max) > 0 && scaleLevels) measurement.scale = { max: Number(scale.max), levels: scaleLevels };
+    else delete measurement.scale;
     if (!Number.isFinite(evaluate(measurement.formula, defaults))) throw new Error(`Formula of ${measurement.name} is not finite`);
   }
   simulation.dimension = simulation.dimension === '3d' ? '3d' : '2d';
-  plan.homeExperiment = normalizeHomeExperiment(plan.homeExperiment);
+  simulation.kind = simulation.kind === 'situation' ? 'situation' : 'quantity';
+  // A situation is a scene with people: it is drawn in 2D, where the kit has its people and places.
+  if (simulation.kind === 'situation') simulation.dimension = '2d';
+  // Filming a moving object only measures physics.
+  plan.homeExperiment = simulation.kind === 'situation' ? null : normalizeHomeExperiment(plan.homeExperiment);
   plan.exercise = normalizeExercise(plan.exercise);
   plan.missions = reachableMissions(plan.missions, plan);
   const scenes = plan.illustrations;

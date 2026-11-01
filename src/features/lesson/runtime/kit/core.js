@@ -20,12 +20,17 @@ const STYLE = [
   '.wb-stage canvas{display:block;width:100%}',
   '.wb-stage canvas.wb-overlay{position:absolute;inset:0;pointer-events:none}',
   `.wb-caption{padding:8px 12px;border-top:1px solid ${COLORS.line};font-size:12px;color:${COLORS.muted}}`,
-  '.wb-results{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}',
-  `.wb-result{background:${COLORS.surface};border:1px solid ${COLORS.line};border-radius:14px;padding:10px 12px}`,
-  `.wb-result span{display:block;font-size:12px;color:${COLORS.muted}}`,
-  '.wb-result strong{display:block;font-size:22px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}',
+  '.wb-results{display:flex;flex-wrap:wrap;gap:8px;padding:10px 10px 0}',
+  `.wb-result{flex:1 1 120px;background:${COLORS.paper};border:1px solid ${COLORS.line};border-radius:12px;padding:6px 10px}`,
+  `.wb-result span{display:block;font-size:11px;color:${COLORS.muted}}`,
+  '.wb-result strong{display:block;font-size:18px;font-weight:650;margin-top:1px;font-variant-numeric:tabular-nums}',
+  '.wb-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}',
+  '.wb-stage canvas{touch-action:none}',
   `@keyframes wb-flash{0%{background:${COLORS.accentSoft};border-color:${COLORS.accent}}100%{background:${COLORS.surface};border-color:${COLORS.line}}}`,
   '.wb-changed{animation:wb-flash 1.2s ease-out}',
+  `.wb-meter{height:8px;border-radius:4px;background:${COLORS.line};margin-top:8px;overflow:hidden}`,
+  `.wb-meter i{display:block;height:100%;border-radius:4px;background:${COLORS.accent};transition:width .5s ease}`,
+  '.wb-switch{flex-wrap:wrap}',
   '.wb-controls{padding:4px 16px}',
   `.wb-control{padding:12px 0;border-bottom:1px solid ${COLORS.line}}`,
   '.wb-control:last-child{border-bottom:0}',
@@ -40,7 +45,8 @@ const STYLE = [
 const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
 
 /**
- * Starts an experiment. `renderer` draws the scene: { mount(stage, options), resize(), render(values, measurements, seconds) }.
+ * Starts an experiment. `renderer` draws the scene: { mount(stage, options, sceneControls), resize(), render(values, measurements, seconds) }.
+ * sceneControls lets a renderer turn gestures in the scene into parameter changes.
  * Returns `renderNow`, which paints the current state immediately.
  */
 export function startExperiment(options, renderer) {
@@ -89,7 +95,7 @@ export function startExperiment(options, renderer) {
   const root = document.createElement('main');
   root.className = 'wb';
   const title = document.createElement('h1');
-  title.className = 'wb-title';
+  title.className = 'wb-sr';
   title.textContent = options.title || spec.title;
   root.appendChild(title);
 
@@ -118,10 +124,17 @@ export function startExperiment(options, renderer) {
     label.textContent = m.label;
     const value = document.createElement('strong');
     box.append(label, value);
+    // A reaction (attention, comfort...) reads as a gauge and a word, not as an invented number.
+    if (m.scale) {
+      const meter = document.createElement('div');
+      meter.className = 'wb-meter';
+      meter.appendChild(document.createElement('i'));
+      box.appendChild(meter);
+    }
     resultNodes[m.name] = value;
     results.appendChild(box);
   });
-  root.appendChild(results);
+  card.insertBefore(results, stage);
 
   const controlNodes = {};
   const controls = document.createElement('section');
@@ -136,12 +149,14 @@ export function startExperiment(options, renderer) {
     const value = document.createElement('b');
     head.append(label, value);
     row.appendChild(head);
-    const isSwitch = p.min === 0 && p.max === 1 && p.step === 1;
+    // Choices named in words (levels), or an on/off switch, are buttons rather than a slider.
+    const levels = Array.isArray(p.levels) && p.levels.length > 1 ? p.levels : null;
+    const isSwitch = Boolean(levels) || (p.min === 0 && p.max === 1 && p.step === 1);
     let input;
     if (isSwitch) {
       input = document.createElement('div');
       input.className = 'wb-switch';
-      ((options.switchLabels && options.switchLabels[p.name]) || ['0', '1']).forEach((text, index) => {
+      (levels || (options.switchLabels && options.switchLabels[p.name]) || ['0', '1']).forEach((text, index) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = text;
@@ -165,7 +180,7 @@ export function startExperiment(options, renderer) {
     }
     row.appendChild(input);
     controls.appendChild(row);
-    controlNodes[p.name] = { value, input, isSwitch, unit: p.unit };
+    controlNodes[p.name] = { value, input, isSwitch, unit: p.unit, row };
   });
   root.appendChild(controls);
   document.body.appendChild(root);
@@ -183,8 +198,13 @@ export function startExperiment(options, renderer) {
     });
     const measured = measureAt(targets);
     spec.measurements.forEach((m) => {
-      const text = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
       const node = resultNodes[m.name];
+      let text = format(measured[m.name]) + (m.unit ? ` ${m.unit}` : '');
+      if (m.scale) {
+        const share = Math.max(0, Math.min(1, measured[m.name] / m.scale.max));
+        text = m.scale.levels[Math.min(m.scale.levels.length - 1, Math.floor(share * m.scale.levels.length))];
+        node.parentNode.querySelector('.wb-meter i').style.width = `${Math.round(share * 100)}%`;
+      }
       // A result that changes lights up briefly, so the learner sees what the change did.
       if (node.textContent && node.textContent !== text) {
         node.parentNode.classList.remove('wb-changed');
@@ -256,7 +276,25 @@ export function startExperiment(options, renderer) {
     requestAnimationFrame(loop);
   };
 
-  renderer.mount(stage, options);
+  const sceneControls = {
+    /** Sets a parameter from a gesture in the scene. */
+    set(name, value) {
+      const p = spec.parameters.find((item) => item.name === name);
+      if (!p) return;
+      tick((value - p.min) / (p.max - p.min || 1));
+      setTarget(name, value, false);
+    },
+    parameter: (name) => spec.parameters.find((item) => item.name === name),
+    /** The parameter is now moved in the scene: its control leaves the panel below. */
+    bind(name) {
+      const node = controlNodes[name];
+      if (!node || node.bound) return;
+      node.bound = true;
+      node.row.style.display = 'none';
+      if (Object.values(controlNodes).every((item) => item.bound)) controls.style.display = 'none';
+    },
+  };
+  renderer.mount(stage, options, sceneControls);
   window.addEventListener('resize', () => renderer.resize());
   syncControls();
   requestAnimationFrame(loop);

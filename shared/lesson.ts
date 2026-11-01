@@ -65,6 +65,8 @@ export interface SimulationParameter {
   max: number;
   default: number;
   step: number;
+  /** Choices named in words, from min (0) to max, shown as buttons: "Trop lent", "Calme", "Trop vite". */
+  levels?: string[];
 }
 
 export interface SimulationMeasurement {
@@ -73,6 +75,8 @@ export interface SimulationMeasurement {
   unit: string;
   /** Arithmetic expression of parameter names giving the exact expected value, e.g. "voltage / resistance". */
   formula: string;
+  /** For a reaction rather than a quantity: shown as a gauge from 0 to max with a word (low to high), never a number. */
+  scale?: { max: number; levels: string[] };
 }
 
 /** A safe experiment with household objects, filmed by the learner and analysed with SAM 3.1. */
@@ -175,6 +179,8 @@ export interface LessonPlan {
   simulation: {
     /** 3D only when depth or rotation is essential to understand the idea. */
     dimension?: '2d' | '3d';
+    /** A quantity to explore, or a situation with people who react to the learner's choices. */
+    kind?: 'quantity' | 'situation';
     description: string;
     parameters: SimulationParameter[];
     measurements: SimulationMeasurement[];

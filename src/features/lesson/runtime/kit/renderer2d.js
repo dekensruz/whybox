@@ -2,10 +2,18 @@
 import { COLORS } from './core.js';
 import { drawIcon } from './icons.js';
 import { drawLabels } from './labels.js';
+import { drawCrowd, drawPerson, drawSetting } from './people.js';
 
 export function createRenderer2d(options) {
   const world = options.world || { width: 100, height: 80 };
   let canvas, context, scale, cssWidth, cssHeight, labels, obstacles;
+  let now = 0;
+  // Handles the learner drags in the scene, rebuilt every frame; the one being dragged; those already touched.
+  let handles = [];
+  let dragging = null;
+  const touched = new Set();
+  let sceneControls = null;
+  let currentValues = {};
 
   const X = (x) => x * scale;
   const Y = (y) => cssHeight - y * scale;
@@ -245,6 +253,65 @@ export function createRenderer2d(options) {
       }
       addObstacle(X(x), Y(y + h) - 20, X(Math.max(full, w)), X(h) + 20);
     },
+    setting(name) {
+      drawSetting(context, name, cssWidth, cssHeight);
+    },
+    person(x, y, height, o = {}) {
+      drawPerson(context, X(x), Y(y), X(height), o, now);
+      if (!o.background) addObstacle(X(x) - X(height) * 0.3, Y(y + height), X(height) * 0.6, X(height));
+    },
+    crowd(count, x, y, w, h, o = {}) {
+      drawCrowd(context, count, X(x), Y(y + h), X(w), X(h), o, now);
+      if (!o.background) addObstacle(X(x), Y(y + h), X(w), X(h));
+    },
+    handle(name, x1, y1, x2, y2, o = {}) {
+      // A handle the learner drags along a track: (x1, y1) is the parameter's minimum, (x2, y2) its maximum.
+      const p = sceneControls && sceneControls.parameter(name);
+      if (!p) return;
+      sceneControls.bind(name);
+      const value = currentValues[name];
+      const k = (value - p.min) / (p.max - p.min || 1);
+      const ax = X(x1);
+      const ay = Y(y1);
+      const bx = X(x2);
+      const by = Y(y2);
+      const hx = ax + (bx - ax) * k;
+      const hy = ay + (by - ay) * k;
+      handles.push({ name, ax, ay, bx, by, hx, hy, min: p.min, max: p.max, step: p.step });
+      if (o.track !== false) {
+        context.beginPath();
+        context.moveTo(ax, ay);
+        context.lineTo(bx, by);
+        stroke({ width: 2, color: COLORS.subtle, dash: true });
+        context.stroke();
+      }
+      const active = dragging === name;
+      // Until the learner first touches it, the handle breathes to say "move me".
+      if (!touched.has(name)) {
+        const pulse = (now * 1.4) % 1;
+        context.beginPath();
+        context.arc(hx, hy, 14 + pulse * 16, 0, Math.PI * 2);
+        context.strokeStyle = `rgba(242,169,0,${0.7 * (1 - pulse)})`;
+        context.lineWidth = 3;
+        context.setLineDash([]);
+        context.stroke();
+      }
+      context.beginPath();
+      context.arc(hx, hy, active ? 15 : 12, 0, Math.PI * 2);
+      context.fillStyle = COLORS.accent;
+      context.fill();
+      context.lineWidth = 3;
+      context.strokeStyle = COLORS.surface;
+      context.setLineDash([]);
+      context.stroke();
+      context.beginPath();
+      context.arc(hx, hy, active ? 15 : 12, 0, Math.PI * 2);
+      context.lineWidth = 1.5;
+      context.strokeStyle = COLORS.ink;
+      context.stroke();
+      addObstacle(hx - 16, hy - 16, 32, 32);
+      if (o.label) g.label(o.label, hx / scale, (cssHeight - hy) / scale, { priority: 2 });
+    },
     label(text, x, y, o = {}) {
       labels.push({ text: String(text), ax: X(x), ay: Y(y), color: o.color || COLORS.ink, priority: o.priority || 0 });
     },
@@ -264,11 +331,54 @@ export function createRenderer2d(options) {
   };
 
   return {
-    mount(stage) {
+    mount(stage, _options, controls) {
       canvas = document.createElement('canvas');
       stage.appendChild(canvas);
       context = canvas.getContext('2d');
+      sceneControls = controls || null;
       resize();
+
+      // Dragging a handle: the pointer is projected on the handle's track and turned into a value.
+      const point = (event) => {
+        const box = canvas.getBoundingClientRect();
+        return { x: event.clientX - box.left, y: event.clientY - box.top };
+      };
+      const move = (event) => {
+        const handle = handles.find((item) => item.name === dragging);
+        if (!handle) return;
+        const { x, y } = point(event);
+        const dx = handle.bx - handle.ax;
+        const dy = handle.by - handle.ay;
+        const k = Math.max(0, Math.min(1, ((x - handle.ax) * dx + (y - handle.ay) * dy) / (dx * dx + dy * dy || 1)));
+        const raw = handle.min + k * (handle.max - handle.min);
+        const value = handle.step > 0 ? handle.min + Math.round((raw - handle.min) / handle.step) * handle.step : raw;
+        sceneControls.set(handle.name, Number(Math.min(handle.max, Math.max(handle.min, value)).toFixed(6)));
+      };
+      canvas.addEventListener('pointerdown', (event) => {
+        const { x, y } = point(event);
+        let nearest = null;
+        handles.forEach((handle) => {
+          const distance = Math.hypot(handle.hx - x, handle.hy - y);
+          if (distance < 32 && (!nearest || distance < nearest.distance)) nearest = { handle, distance };
+        });
+        if (!nearest) return;
+        dragging = nearest.handle.name;
+        touched.add(dragging);
+        canvas.setPointerCapture(event.pointerId);
+        canvas.style.cursor = 'grabbing';
+        event.preventDefault();
+      });
+      canvas.addEventListener('pointermove', (event) => {
+        if (dragging) return move(event);
+        const { x, y } = point(event);
+        canvas.style.cursor = handles.some((handle) => Math.hypot(handle.hx - x, handle.hy - y) < 32) ? 'grab' : '';
+      });
+      const release = () => {
+        dragging = null;
+        canvas.style.cursor = '';
+      };
+      canvas.addEventListener('pointerup', release);
+      canvas.addEventListener('pointercancel', release);
     },
     resize,
     render(values, measurements, seconds) {
@@ -278,6 +388,9 @@ export function createRenderer2d(options) {
       context.fillRect(0, 0, cssWidth, cssHeight);
       labels = [];
       obstacles = [];
+      handles = [];
+      currentValues = values;
+      now = seconds;
       options.draw(g, values, measurements, seconds);
       drawLabels(context, labels, obstacles, cssWidth, cssHeight);
     },
