@@ -263,6 +263,8 @@ ${kitGuide(plan)}
 
 ${DESIGN_RULES}
 
+Required: at least one parameter is moved with g.handle right on its object in the scene (a ball's spin can be a
+handle on an arc around the ball, a kick's strength a handle pulling the foot back). A scene with no handle is rejected.
 All visible text in the language of this lesson (code: ${learner.language}).
 The per-frame function runs on entry-level phones: keep it light, and never throw.
 
