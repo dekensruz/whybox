@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { challengeStart } from '@shared/challenge';
 import type { CounterTour, LearnerContext, LessonPlan, Narration, RealExperimentResult, TourStep, Understanding } from '@shared/lesson';
@@ -6,13 +6,17 @@ import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { useI18n } from '@/i18n';
 import { cx } from '@/lib/cx';
-import { chime, setSoundEnabled, soundEnabled } from '@/lib/sound';
-import { setVoiceEnabled, speak, speechSupported, stopSpeaking, voiceEnabled } from '@/lib/speech';
+import { chime, miss, setSoundEnabled, soundEnabled } from '@/lib/sound';
+import { prepareSpeech, setVoiceEnabled, speak, speechSupported, stopSpeaking, voiceEnabled } from '@/lib/speech';
 import { ExerciseCard, type ExerciseResult } from './ExerciseCard';
+import { describeMeasure } from './measure';
 import { MissionsPanel } from './MissionsPanel';
 import { RealExperiment } from './real/RealExperiment';
 import { SimulationFrame } from './SimulationFrame';
 import { Tutor } from './Tutor';
+import { AnswerLine, VerdictMark } from './Verdict';
+import { starsFor, Victory, type VictoryState } from './Victory';
+import type { TutorGesture } from './avatar/tutorScene';
 import type { IllustrationKind, LessonOutcome, Verification } from './types';
 
 const UNDERSTANDINGS: Array<{ value: Understanding; key: 'lesson.understandingClear' | 'lesson.understandingPartly' | 'lesson.understandingLost' }> = [
@@ -22,6 +26,9 @@ const UNDERSTANDINGS: Array<{ value: Understanding; key: 'lesson.understandingCl
 ];
 
 const SWIPE_DISTANCE = 60;
+
+// The 3D tutor carries three.js: it loads only when the voice is on.
+const TutorAvatar = lazy(() => import('./avatar/TutorAvatar'));
 
 interface LessonViewProps {
   plan: LessonPlan;
@@ -134,10 +141,21 @@ export function LessonView(props: LessonViewProps) {
   const [liveValues, setLiveValues] = useState<Record<string, number> | null>(null);
   const [liveMeasures, setLiveMeasures] = useState<Record<string, number> | null>(null);
   const settle = useRef<number | undefined>(undefined);
+  // Each setting the learner stops on is one try: fewer tries to win a level, more stars.
+  const tries = useRef(0);
   const onValues = useCallback((values: Record<string, number>, measures: Record<string, number>) => {
     setLiveMeasures(measures);
     window.clearTimeout(settle.current);
-    settle.current = window.setTimeout(() => setLiveValues(values), 400);
+    settle.current = window.setTimeout(() => {
+      tries.current++;
+      setLiveValues(values);
+    }, 400);
+  }, []);
+  const [victory, setVictory] = useState<VictoryState | null>(null);
+  const [stars, setStars] = useState(0);
+  const win = useCallback((next: VictoryState) => {
+    setVictory(next);
+    setStars((total) => total + next.stars);
   }, []);
 
   // A challenge step is not shown: the learner finds its state alone, starting from the previous step's state,
@@ -157,6 +175,7 @@ export function LessonView(props: LessonViewProps) {
     if (at === null || !challenge || value === undefined || value < challenge.min || value > challenge.max) return;
     chime();
     setSolved((current) => ({ ...current, [at]: 'found' }));
+    win({ title: t('lesson.challengeWon'), stars: starsFor(tries.current) });
   }, [liveMeasures]);
 
   const experimentState =
@@ -166,7 +185,6 @@ export function LessonView(props: LessonViewProps) {
     experimentState === stepState &&
     Object.entries(stepState).some(([name, value]) => name in liveValues && Math.abs(liveValues[name] - value) > Math.max(1e-6, Math.abs(value) * 1e-3));
   const challengeMeasurement = plan.simulation.measurements.find((measurement) => measurement.name === challenge?.measurement);
-  const formatValue = (value: number) => new Intl.NumberFormat(language, { maximumFractionDigits: Math.abs(value) >= 10 ? 1 : 2 }).format(value);
 
   // Missions start from the experiment's default settings, which the server checked do not already win them.
   // They are played in order, and only count once the experiment changes on the missions card.
@@ -180,7 +198,16 @@ export function LessonView(props: LessonViewProps) {
     if (!onMissions.current || !mission || value === undefined || value < mission.min || value > mission.max) return;
     chime(reached === missions.length - 1);
     setReached(reached + 1);
+    win({ title: t('lesson.levelWon', { current: reached + 1, total: missions.length }), text: mission.success, stars: starsFor(tries.current) });
+    tries.current = 0;
   }, [liveMeasures]);
+
+  // A level starts when a challenge opens or a mission begins: its tries start from zero.
+  const level = slide.kind === 'missions' ? `missions-${reached}` : challengeOpen ? `step-${index}` : null;
+  useEffect(() => {
+    tries.current = 0;
+  }, [level]);
+  useEffect(() => setVictory(null), [index]);
 
   const [sound, setSound] = useState(soundEnabled);
   const toggleSound = () => {
@@ -224,6 +251,8 @@ export function LessonView(props: LessonViewProps) {
     if (slide.kind === 'predict' && !outcome) {
       if (choice === null) return;
       onPredict(choice);
+      if (choice === plan.prediction.answerIndex) chime();
+      else miss();
       setDirection('forward');
       setIndex(index + 1);
       return;
@@ -313,11 +342,48 @@ export function LessonView(props: LessonViewProps) {
     else stopSpeaking();
   }, [voice, spoken, say]);
   useEffect(() => stopSpeaking, []);
+  // Every line is prepared in advance, while the learner reads, so each card speaks without waiting.
+  useEffect(() => {
+    if (!voice || !narration) return;
+    [
+      narration.hook,
+      narration.prediction,
+      ...narration.steps.flatMap((line) => [line.intro, line.found ?? '']),
+      ...narration.concepts,
+      narration.exercise ?? '',
+      narration.missions ?? '',
+      narration.summary,
+    ].forEach((line) => prepareSpeech(line, language));
+  }, [voice, narration, language]);
   const toggleVoice = () => {
     setVoiceEnabled(!voice);
     setVoice(!voice);
   };
   const toggleTutor = () => (speaking ? stopSpeaking() : spoken && say(spoken));
+
+  // The tutor's gesture follows the moment of the lesson.
+  const gesture: TutorGesture = (() => {
+    if (victory) return 'celebrate';
+    switch (slide.kind) {
+      case 'predict':
+        return 'think';
+      case 'example':
+        return outcome?.exercise?.correct ? 'celebrate' : 'think';
+      case 'reveal':
+        return correct ? 'happy' : 'encourage';
+      case 'step':
+        if (challengeOpen) return 'think';
+        return challenge && solved[slide.index] === 'found' ? 'celebrate' : 'point';
+      case 'missions':
+        return missions.length > 0 && reached >= missions.length ? 'celebrate' : 'point';
+      case 'real':
+        return 'point';
+      case 'end':
+        return 'happy';
+      default:
+        return 'explain';
+    }
+  })();
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -397,7 +463,8 @@ export function LessonView(props: LessonViewProps) {
         {/* The experiment stays loaded across the tour, so swiping between steps only moves it. */}
         {html && (
           <div className={cx(isStep ? 'grid gap-6 lg:grid-cols-[1fr_360px] lg:items-start' : 'hidden')}>
-            <div className="order-2 lg:order-1">
+            <div className="relative order-2 lg:order-1">
+              {victory && <Victory victory={victory} onClose={() => setVictory(null)} />}
               <SimulationFrame html={html} plan={plan} language={language} state={experimentState} onValues={onValues} sound={sound} />
             </div>
             {slide.kind === 'missions' && (
@@ -408,6 +475,7 @@ export function LessonView(props: LessonViewProps) {
                   measurements={plan.simulation.measurements}
                   measures={liveMeasures}
                   reached={reached}
+                  stars={stars}
                   language={language}
                 />
               </div>
@@ -430,8 +498,7 @@ export function LessonView(props: LessonViewProps) {
                       <p className="text-sm tabular-nums text-muted">
                         {challengeMeasurement.label} ·{' '}
                         <span className="font-medium text-ink">
-                          {formatValue(liveMeasures[challenge.measurement])}
-                          {challengeMeasurement.unit ? ` ${challengeMeasurement.unit}` : ''}
+                          {describeMeasure(challengeMeasurement, liveMeasures[challenge.measurement], language)}
                         </span>
                       </p>
                     )}
@@ -504,10 +571,24 @@ export function LessonView(props: LessonViewProps) {
 
             {slide.kind === 'reveal' && (
               <div className="flex flex-1 flex-col justify-center gap-5 py-10">
-                <Eyebrow>{t('lesson.predictionLabel')}</Eyebrow>
-                <h2 className="text-[28px] font-semibold leading-tight tracking-tight text-balance">
-                  {correct ? t('lesson.correct') : t('lesson.incorrect')}
-                </h2>
+                <div className="flex items-center gap-4">
+                  <VerdictMark correct={correct} />
+                  <h2 className="text-[28px] font-semibold leading-tight tracking-tight text-balance">
+                    {correct ? t('lesson.correct') : t('lesson.incorrect')}
+                  </h2>
+                </div>
+                {outcome && (
+                  <div className="flex flex-col gap-2">
+                    <AnswerLine correct={correct} label={t('lesson.yourAnswer')}>
+                      {plan.prediction.options[outcome.chosen]}
+                    </AnswerLine>
+                    {!correct && (
+                      <AnswerLine correct label={t('lesson.goodAnswer')}>
+                        {plan.prediction.options[plan.prediction.answerIndex]}
+                      </AnswerLine>
+                    )}
+                  </div>
+                )}
                 <p className="text-[17px] leading-relaxed text-muted">{discovery ? t('lesson.revealSearch') : plan.prediction.explanation}</p>
                 {!correct && counter && <p className="border-l-2 border-accent pl-4 text-[17px] leading-relaxed">{counter.intro}</p>}
                 {!correct && counter === undefined && <p className="text-sm text-subtle">{t('lesson.counterPreparing')}</p>}
@@ -593,7 +674,16 @@ export function LessonView(props: LessonViewProps) {
 
       <footer className="sticky bottom-0 z-10 border-t border-line bg-paper/95 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:px-10">
         <div className={cx('mx-auto flex w-full items-center gap-3', isStep ? 'max-w-5xl' : 'max-w-xl')}>
-          {voice && <Tutor speaking={speaking} onToggle={toggleTutor} />}
+          {voice && (
+            <Suspense fallback={<Tutor speaking={speaking} onToggle={toggleTutor} />}>
+              <TutorAvatar
+                gesture={gesture}
+                speaking={speaking}
+                onToggle={toggleTutor}
+                fallback={<Tutor speaking={speaking} onToggle={toggleTutor} />}
+              />
+            </Suspense>
+          )}
           <Button variant="secondary" className="flex-1" disabled={index === 0} onClick={() => go(index - 1)}>
             {t('lesson.previous')}
           </Button>

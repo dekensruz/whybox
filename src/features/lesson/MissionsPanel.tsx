@@ -1,6 +1,7 @@
 import type { Mission, SimulationMeasurement } from '@shared/lesson';
 import { useI18n } from '@/i18n';
 import { cx } from '@/lib/cx';
+import { describeMeasure } from './measure';
 
 interface MissionsPanelProps {
   missions: Mission[];
@@ -9,17 +10,29 @@ interface MissionsPanelProps {
   measures: Record<string, number> | null;
   /** How many missions are complete; they are played in order. */
   reached: number;
+  /** Stars won so far in this lesson, challenges included. */
+  stars: number;
   language: string;
 }
 
 /** The challenges of the experiment, one at a time: the current one, what it shows now, and what each success taught. */
-export function MissionsPanel({ missions, measurements, measures, reached, language }: MissionsPanelProps) {
+export function MissionsPanel({ missions, measurements, measures, reached, stars, language }: MissionsPanelProps) {
   const { t } = useI18n();
-  const format = (value: number) => new Intl.NumberFormat(language, { maximumFractionDigits: Math.abs(value) >= 10 ? 1 : 2 }).format(value);
   const done = reached >= missions.length;
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[20px] font-semibold tracking-tight">
+          {t('lesson.levelOf', { current: Math.min(reached + 1, missions.length), total: missions.length })}
+        </p>
+        <p className="flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-sm font-semibold tabular-nums">
+          <svg viewBox="0 0 24 24" aria-hidden className="size-4 text-accent">
+            <path fill="currentColor" d="m12 2.8 2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2l-5.7 3.1 1.2-6.4-4.7-4.4 6.4-.8z" />
+          </svg>
+          {t('lesson.starsTotal', { count: stars })}
+        </p>
+      </div>
       <p className="leading-relaxed text-muted">{t('lesson.missionsIntro')}</p>
       <ol className="flex flex-col gap-3">
         {missions.map((mission, position) => {
@@ -56,7 +69,7 @@ export function MissionsPanel({ missions, measurements, measures, reached, langu
               </div>
               {state === 'active' && value !== undefined && measurement && (
                 <p className="mt-2 pl-9 text-sm tabular-nums text-muted">
-                  {t('lesson.missionNow', { value: `${format(value)}${measurement.unit ? ` ${measurement.unit}` : ''}` })}
+                  {t('lesson.missionNow', { value: describeMeasure(measurement, value, language) })}
                 </p>
               )}
               {state === 'done' && (

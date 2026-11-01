@@ -5,7 +5,9 @@ import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { TextAreaField, TextField } from '@/components/ui/Field';
 import { VoiceButton } from '@/components/VoiceButton';
 import { useI18n } from '@/i18n';
+import { chime, miss } from '@/lib/sound';
 import { checkAnswer } from './api';
+import { VerdictMark } from './Verdict';
 
 export interface ExerciseResult {
   correct: boolean;
@@ -52,7 +54,10 @@ export function ExerciseCard({ plan, exercise, learner, onDone }: ExerciseCardPr
           ? Math.abs(readNumber(answer) - exercise.answer) <= Math.max(1e-9, Math.abs(exercise.answer) * exercise.tolerance)
           : choice === exercise.answerIndex;
       setFeedback({ correct, text: correct ? '' : hint });
-      if (correct) finish(true, attempt);
+      if (correct) {
+        chime();
+        finish(true, attempt);
+      } else miss();
       return;
     }
 
@@ -62,7 +67,10 @@ export function ExerciseCard({ plan, exercise, learner, onDone }: ExerciseCardPr
     try {
       const check = await checkAnswer(plan, learner, answer, attempt);
       setFeedback({ correct: check.correct, text: check.feedback });
-      if (check.correct) finish(true, attempt);
+      if (check.correct) {
+        chime();
+        finish(true, attempt);
+      } else miss();
     } catch {
       setFeedback({ correct: false, text: hint });
     } finally {
@@ -116,12 +124,20 @@ export function ExerciseCard({ plan, exercise, learner, onDone }: ExerciseCardPr
 
         {feedback && (
           <div
+            key={attempts}
             role="status"
-            className={feedback.correct ? 'rounded-2xl border border-ink bg-surface px-5 py-4' : 'rounded-2xl border border-accent bg-accent-soft px-5 py-4'}
+            className={
+              feedback.correct
+                ? 'flex gap-4 rounded-2xl border-2 border-positive bg-positive/5 px-5 py-4'
+                : 'flex gap-4 rounded-2xl border-2 border-negative/60 bg-negative/5 px-5 py-4'
+            }
           >
-            <p className="font-medium">{feedback.correct ? t('lesson.rightAnswer') : t('lesson.tryAgain')}</p>
-            {feedback.text && <p className="mt-1 leading-relaxed">{feedback.text}</p>}
-            {!feedback.correct && attempts >= 2 && <p className="mt-2 text-sm text-muted">{t('lesson.lastTry')}</p>}
+            <VerdictMark correct={feedback.correct} className="size-9" />
+            <div>
+              <p className="text-[17px] font-semibold">{feedback.correct ? t('lesson.rightAnswer') : t('lesson.tryAgain')}</p>
+              {feedback.text && <p className="mt-1 leading-relaxed">{feedback.text}</p>}
+              {!feedback.correct && attempts >= 2 && <p className="mt-2 text-sm text-muted">{t('lesson.lastTry')}</p>}
+            </div>
           </div>
         )}
 
