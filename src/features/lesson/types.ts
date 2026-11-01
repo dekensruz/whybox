@@ -22,6 +22,8 @@ export interface LessonOutcome {
   tourCompleted?: boolean;
   understanding?: Understanding;
   exercise?: { correct: boolean; attempts: number };
+  /** Stars won in the lesson's challenges and missions (up to 3 each). */
+  stars?: number;
 }
 
 export interface Lesson {

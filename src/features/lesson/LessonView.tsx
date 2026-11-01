@@ -53,6 +53,8 @@ interface LessonViewProps {
   illustrations: Partial<Record<IllustrationKind, string>>;
   /** What the tutor says on each card, once written; until then it reads the cards themselves. */
   narration?: Narration;
+  /** Called with the stars won so far in this visit of the lesson. */
+  onStars?: (stars: number) => void;
 }
 
 /** An illustration that fades in when it arrives, keeping its place so the card does not jump. */
@@ -157,6 +159,10 @@ export function LessonView(props: LessonViewProps) {
     setVictory(next);
     setStars((total) => total + next.stars);
   }, []);
+  const { onStars } = props;
+  useEffect(() => {
+    if (stars > 0) onStars?.(stars);
+  }, [stars, onStars]);
 
   // A challenge step is not shown: the learner finds its state alone, starting from the previous step's state,
   // and reads the explanation only once found. "Show me" applies the step's own state instead.

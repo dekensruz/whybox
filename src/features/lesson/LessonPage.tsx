@@ -58,6 +58,12 @@ export function LessonPage() {
     [update],
   );
 
+  // The best score of the lesson is kept: replaying it never lowers it.
+  const onStars = useCallback(
+    (stars: number) => outcome && stars > (outcome.stars ?? 0) && update({ outcome: { ...outcome, stars } }),
+    [outcome, update],
+  );
+
   const onExercise = useCallback(
     (exercise: { correct: boolean; attempts: number }) => outcome && update({ outcome: { ...outcome, exercise } }),
     [outcome, update],
@@ -88,6 +94,7 @@ export function LessonPage() {
         onExercise={onExercise}
         illustrations={illustrations}
         narration={lesson.narration ?? undefined}
+        onStars={onStars}
       />
     );
   }

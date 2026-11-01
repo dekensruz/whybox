@@ -73,6 +73,18 @@ export const transcribe = async (wav: Blob) => {
 export const requestIllustration = (scene: string, kind: IllustrationKind) =>
   post<{ image: string }>('/api/lessons/illustrations', { scene, kind }).then((result) => result.image);
 
+export interface Suggestion {
+  question: string;
+  subject: string;
+  kind: 'review' | 'next' | 'discover';
+  reason: string;
+}
+
+export const requestSuggestions = (
+  learner: LearnerContext,
+  record: { lessons: Array<{ title: string; subject: string; mastery: number }>; toReview: string[] },
+) => post<{ suggestions: Suggestion[] }>('/api/learner/suggestions', { learner, record }).then((result) => result.suggestions);
+
 export const requestNarration = (plan: LessonPlan, learner: LearnerContext) =>
   post<{ narration: Narration }>('/api/lessons/narration', { plan, learner }).then((result) => result.narration);
 
