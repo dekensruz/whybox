@@ -6,7 +6,7 @@ import { BackButton } from '@/components/BackButton';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import { useI18n } from '@/i18n';
-import { learnerFromProfile, requestCounterTour } from './api';
+import { learnerFromProfile, requestCounterTour, requestNarration } from './api';
 import { LessonView } from './LessonView';
 import { PreparationProgress } from './PreparationProgress';
 import { useIllustrations } from './useIllustrations';
@@ -32,6 +32,16 @@ export function LessonPage() {
       .then((counter) => update({ counter }))
       .catch(() => update({ counter: null }));
   }, [plan, learner, outcome, lesson?.counter, update]);
+
+  // The tutor's words are written in the background, once the lesson is planned.
+  const narrationRequested = useRef(false);
+  useEffect(() => {
+    if (!plan || !learner || lesson?.narration !== undefined || narrationRequested.current) return;
+    narrationRequested.current = true;
+    requestNarration(plan, learner)
+      .then((narration) => update({ narration }))
+      .catch(() => update({ narration: null }));
+  }, [plan, learner, lesson?.narration, update]);
 
   const onPredict = useCallback(
     (chosen: number) => plan && update({ outcome: { chosen, predictionCorrect: chosen === plan.prediction.answerIndex } }),
@@ -77,6 +87,7 @@ export function LessonPage() {
         onRealResult={onRealResult}
         onExercise={onExercise}
         illustrations={illustrations}
+        narration={lesson.narration ?? undefined}
       />
     );
   }

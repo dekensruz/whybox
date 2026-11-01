@@ -1,4 +1,4 @@
-import type { CounterTour, LessonPlan, RealExperimentResult, Understanding } from '@shared/lesson';
+import type { CounterTour, LessonPlan, Narration, RealExperimentResult, Understanding } from '@shared/lesson';
 
 export type IllustrationKind = 'hook' | 'summary' | 'exercise' | `concept${number}`;
 
@@ -40,4 +40,6 @@ export interface Lesson {
   illustrated?: Partial<Record<IllustrationKind, boolean>>;
   /** Result of the real experiment the learner filmed (the video itself is never stored). */
   realExperiment?: RealExperimentResult & { objectSizeCm: number };
+  /** What the tutor says aloud on each card; null when it could not be written. */
+  narration?: Narration | null;
 }

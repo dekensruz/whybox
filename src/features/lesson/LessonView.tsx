@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { challengeStart } from '@shared/challenge';
-import type { CounterTour, LearnerContext, LessonPlan, RealExperimentResult, TourStep, Understanding } from '@shared/lesson';
+import type { CounterTour, LearnerContext, LessonPlan, Narration, RealExperimentResult, TourStep, Understanding } from '@shared/lesson';
 import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
 import { useI18n } from '@/i18n';
 import { cx } from '@/lib/cx';
 import { chime, setSoundEnabled, soundEnabled } from '@/lib/sound';
+import { setVoiceEnabled, speak, speechSupported, stopSpeaking, voiceEnabled } from '@/lib/speech';
 import { ExerciseCard, type ExerciseResult } from './ExerciseCard';
 import { MissionsPanel } from './MissionsPanel';
 import { RealExperiment } from './real/RealExperiment';
 import { SimulationFrame } from './SimulationFrame';
+import { Tutor } from './Tutor';
 import type { IllustrationKind, LessonOutcome, Verification } from './types';
 
 const UNDERSTANDINGS: Array<{ value: Understanding; key: 'lesson.understandingClear' | 'lesson.understandingPartly' | 'lesson.understandingLost' }> = [
@@ -42,6 +44,8 @@ interface LessonViewProps {
   onExercise: (result: ExerciseResult) => void;
   /** Object URLs of the lesson's Muse Image illustrations, when they are ready. */
   illustrations: Partial<Record<IllustrationKind, string>>;
+  /** What the tutor says on each card, once written; until then it reads the cards themselves. */
+  narration?: Narration;
 }
 
 /** An illustration that fades in when it arrives, keeping its place so the card does not jump. */
@@ -78,7 +82,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
  */
 export function LessonView(props: LessonViewProps) {
   const { plan, html, verification, language, preparation, outcome, counter, onPredict, onTourComplete, onUnderstanding } = props;
-  const { learner, realExperiment, onRealResult, onExercise, illustrations } = props;
+  const { learner, realExperiment, onRealResult, onExercise, illustrations, narration } = props;
   const { t } = useI18n();
   const navigate = useNavigate();
   const [choice, setChoice] = useState<number | null>(outcome?.chosen ?? null);
@@ -264,6 +268,57 @@ export function LessonView(props: LessonViewProps) {
   const onPrimary = () => (slide.kind === 'end' ? navigate('/') : forward());
   const isStep = slide.kind === 'step' || slide.kind === 'missions';
 
+  // The tutor says each card aloud when it appears, and again when a challenge is solved.
+  const [voice, setVoice] = useState(() => speechSupported() && voiceEnabled());
+  const [speaking, setSpeaking] = useState(false);
+  const counterSteps = tour.filter((entry) => entry.againstIdea).length;
+  const spoken = (() => {
+    switch (slide.kind) {
+      case 'hook':
+        return narration?.hook || plan.hook;
+      case 'predict':
+        return outcome ? '' : narration?.prediction || plan.prediction.question;
+      case 'reveal':
+        return [
+          correct ? t('lesson.correct') : t('lesson.incorrect'),
+          discovery ? t('lesson.revealSearch') : plan.prediction.explanation,
+          !correct && counter ? counter.intro : '',
+        ].join(' ');
+      case 'step': {
+        const entry = tour[slide.index];
+        const line = entry.againstIdea ? undefined : narration?.steps[slide.index - counterSteps];
+        if (entry.challenge && solved[slide.index]) return line?.found || `${entry.text} ${entry.observe}`;
+        return line?.intro || entry.challenge?.question || `${entry.text} ${entry.observe}`;
+      }
+      case 'missions':
+        return narration?.missions || t('lesson.missionsIntro');
+      case 'concept':
+        return narration?.concepts[slide.index] || `${plan.concepts[slide.index].term}. ${plan.concepts[slide.index].definition}`;
+      case 'example':
+        return narration?.exercise || plan.exercise?.question || plan.example?.statement || '';
+      case 'summary':
+        return narration?.summary || plan.summary;
+      case 'end':
+        return outcome?.understanding ? '' : t('lesson.understandingQuestion');
+      default:
+        return '';
+    }
+  })();
+  const say = useCallback(
+    (text: string) => speak(text, language, { onStart: () => setSpeaking(true), onEnd: () => setSpeaking(false) }),
+    [language],
+  );
+  useEffect(() => {
+    if (voice && spoken) say(spoken);
+    else stopSpeaking();
+  }, [voice, spoken, say]);
+  useEffect(() => stopSpeaking, []);
+  const toggleVoice = () => {
+    setVoiceEnabled(!voice);
+    setVoice(!voice);
+  };
+  const toggleTutor = () => (speaking ? stopSpeaking() : spoken && say(spoken));
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-10 flex items-center gap-4 bg-paper/95 px-6 pb-3 pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur lg:px-10">
@@ -289,6 +344,21 @@ export function LessonView(props: LessonViewProps) {
             <span key={position} className={cx('h-1 flex-1 rounded-full transition-colors', position <= index ? 'bg-ink' : 'bg-line')} />
           ))}
         </div>
+        {speechSupported() && (
+          <button
+            type="button"
+            onClick={toggleVoice}
+            className="flex size-10 shrink-0 items-center justify-center rounded-full text-muted hover:text-ink"
+            aria-label={voice ? t('lesson.voiceOn') : t('lesson.voiceOff')}
+            aria-pressed={voice}
+          >
+            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="7.5" cy="7" r="3" />
+              <path d="M2.5 16.5c.6-2.6 2.6-4 5-4s4.4 1.4 5 4" />
+              {voice ? <path d="M14.5 5a4 4 0 0 1 0 5M16.8 3a7 7 0 0 1 0 9" /> : <path d="m14 5.5 4 4m0-4-4 4" />}
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={toggleSound}
@@ -522,7 +592,8 @@ export function LessonView(props: LessonViewProps) {
       </main>
 
       <footer className="sticky bottom-0 z-10 border-t border-line bg-paper/95 px-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur lg:px-10">
-        <div className={cx('mx-auto flex w-full gap-3', isStep ? 'max-w-5xl' : 'max-w-xl')}>
+        <div className={cx('mx-auto flex w-full items-center gap-3', isStep ? 'max-w-5xl' : 'max-w-xl')}>
+          {voice && <Tutor speaking={speaking} onToggle={toggleTutor} />}
           <Button variant="secondary" className="flex-1" disabled={index === 0} onClick={() => go(index - 1)}>
             {t('lesson.previous')}
           </Button>
