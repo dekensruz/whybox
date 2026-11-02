@@ -35,14 +35,19 @@ export function useLessonPipeline(lessonId: string, learner: LearnerContext | nu
 
   const run = useCallback(async () => {
     const current = getLesson(lessonId);
-    if (!current || !learner || running.current || current.status === 'ready') return;
+    if (!current || !learner || running.current || current.status === 'ready' || current.status === 'refused') return;
     running.current = true;
     try {
       let plan = current.plan;
       if (!plan) {
         setStage('planning');
         const memory = buildLearnerMemory(listLessons(), lessonId);
-        plan = await requestPlan({ ...learner, memory }, { question: current.question, image: current.image });
+        const planned = await requestPlan({ ...learner, memory }, { question: current.question, image: current.image });
+        if (!planned.plan) {
+          commit({ status: 'refused', refused: planned.refused ?? { reason: '', alternative: '' } });
+          return;
+        }
+        plan = planned.plan;
         commit({ plan, status: 'building' });
       }
 

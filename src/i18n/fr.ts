@@ -199,6 +199,7 @@ export const fr = {
     empty: 'Vous n’avez pas encore de leçon. Posez une question ou photographiez une leçon pour commencer.',
     preparing: 'En préparation',
     all: 'Toutes',
+    refused: 'Question non traitée',
     failed: 'À relancer',
   },
   progress: {
@@ -340,6 +341,9 @@ export const fr = {
     tutorListen: 'Écouter la tutrice',
     tutorStop: 'Arrêter la tutrice',
     challengeLabel: 'Défi',
+    refusedLabel: 'Une question pour quelqu’un d’autre',
+    refusedTitle: 'Whybox ne peut pas en faire une leçon.',
+    refusedAlternative: 'Explorer plutôt cette question',
     challengeHint: 'Changez les réglages de l’expérience jusqu’à trouver.',
     challengeFound: 'Vous avez trouvé.',
     challengeShown: 'Voici une solution.',

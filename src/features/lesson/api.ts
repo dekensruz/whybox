@@ -29,8 +29,9 @@ export const learnerFromProfile = (profile: Profile): LearnerContext => ({
   deviceUsage: profile.deviceUsage,
 });
 
+/** A lesson plan, or the reason Whybox will not teach this question and a nearby one it can. */
 export const requestPlan = (learner: LearnerContext, input: { question?: string; image?: string }) =>
-  post<{ plan: LessonPlan }>('/api/lessons/plan', { learner, ...input }).then((result) => result.plan);
+  post<{ plan?: LessonPlan; refused?: { reason: string; alternative: string } }>('/api/lessons/plan', { learner, ...input });
 
 export const requestSimulation = (
   plan: LessonPlan,

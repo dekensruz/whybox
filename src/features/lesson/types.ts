@@ -2,7 +2,7 @@ import type { CounterTour, LessonPlan, Narration, RealExperimentResult, Understa
 
 export type IllustrationKind = 'hook' | 'summary' | 'exercise' | `concept${number}`;
 
-export type LessonStatus = 'planning' | 'building' | 'verifying' | 'ready' | 'failed';
+export type LessonStatus = 'planning' | 'building' | 'verifying' | 'ready' | 'failed' | 'refused';
 
 export interface Verification {
   passed: number;
@@ -42,6 +42,8 @@ export interface Lesson {
   illustrated?: Partial<Record<IllustrationKind, boolean>>;
   /** Result of the real experiment the learner filmed (the video itself is never stored). */
   realExperiment?: RealExperimentResult & { objectSizeCm: number };
+  /** Why Whybox did not make a lesson of this question, and a nearby question it can explore instead. */
+  refused?: { reason: string; alternative: string };
   /** What the tutor says aloud on each card; null when it could not be written. */
   narration?: Narration | null;
 }

@@ -201,6 +201,7 @@ export const en: Messages = {
     empty: 'You have no lesson yet. Ask a question or take a photo of a lesson to start.',
     preparing: 'Being prepared',
     all: 'All',
+    refused: 'Question not covered',
     failed: 'To restart',
   },
   progress: {
@@ -342,6 +343,9 @@ export const en: Messages = {
     tutorListen: 'Listen to the tutor',
     tutorStop: 'Stop the tutor',
     challengeLabel: 'Challenge',
+    refusedLabel: 'A question for someone else',
+    refusedTitle: 'Whybox cannot make a lesson of it.',
+    refusedAlternative: 'Explore this question instead',
     challengeHint: 'Change the settings of the experiment until you find it.',
     challengeFound: 'You found it.',
     challengeShown: 'Here is one solution.',
