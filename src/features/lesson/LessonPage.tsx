@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import type { RealExperimentResult, Understanding } from '@shared/lesson';
 import { useSession } from '@/app/SessionProvider';
 import { BackButton } from '@/components/BackButton';
@@ -7,6 +7,7 @@ import { Screen } from '@/components/Screen';
 import { Button } from '@/components/ui/Button';
 import { useI18n } from '@/i18n';
 import { learnerFromProfile, requestCounterTour, requestNarration } from './api';
+import { createLesson } from './lessonStore';
 import { LessonView } from './LessonView';
 import { PreparationProgress } from './PreparationProgress';
 import { useIllustrations } from './useIllustrations';
@@ -15,6 +16,7 @@ import { useLessonPipeline } from './useLessonPipeline';
 export function LessonPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { profile } = useSession();
   const learner = useMemo(() => (profile ? learnerFromProfile(profile) : null), [profile]);
   const { lesson, stage, checks, retry, update } = useLessonPipeline(id, learner);
@@ -101,7 +103,28 @@ export function LessonPage() {
 
   return (
     <Screen header={<BackButton to="/" />}>
-      {lesson.status === 'failed' ? (
+      {lesson.status === 'refused' ? (
+        <div className="flex flex-1 flex-col justify-center gap-6 py-10">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-subtle">{t('lesson.refusedLabel')}</p>
+            <h1 className="text-[26px] font-semibold leading-tight tracking-tight">{t('lesson.refusedTitle')}</h1>
+            {lesson.refused?.reason && <p className="text-[17px] leading-relaxed text-muted">{lesson.refused.reason}</p>}
+          </div>
+          {lesson.refused?.alternative && (
+            <button
+              type="button"
+              onClick={() => navigate(`/lesson/${createLesson({ question: lesson.refused!.alternative }).id}`, { replace: true })}
+              className="flex flex-col gap-1 rounded-2xl border-2 border-accent bg-accent-soft px-5 py-4 text-left transition-transform hover:-translate-y-0.5"
+            >
+              <span className="text-sm font-medium text-muted">{t('lesson.refusedAlternative')}</span>
+              <span className="text-[18px] font-semibold leading-snug">{lesson.refused.alternative}</span>
+            </button>
+          )}
+          <Button variant="secondary" onClick={() => navigate('/')}>
+            {t('lesson.close')}
+          </Button>
+        </div>
+      ) : lesson.status === 'failed' ? (
         <div className="flex flex-1 flex-col justify-center gap-6 py-10">
           <div className="flex flex-col gap-3">
             <h1 className="text-[26px] font-semibold leading-tight tracking-tight">{t('lesson.failedTitle')}</h1>

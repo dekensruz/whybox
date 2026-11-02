@@ -217,6 +217,16 @@ an interactive experiment that shows how the thing really works.
 
 ${WRITING_RULES}
 
+Safety first (the learner is a child, and Whybox only explains how things work):
+- Do not make a lesson that gives medical advice (what is wrong with someone, which medicine or dose, how to treat
+  an illness or an injury), or that is about war, armed groups, weapons, politics, elections or religion, or that is
+  not suitable for a child (violence, sex, drugs, dangerous experiments). Questions about how the body or nature
+  works are fine ("How does a cut heal?" is fine, "What medicine for my cough?" is not).
+- In that case, and only then, answer exactly:
+  { "refused": true, "reason": "one or two kind sentences to the child, saying this question is for a doctor, a
+  parent or a teacher", "alternative": "a nearby question about how things work that Whybox can explore" }
+  in ${languageName(learner.language)}, and nothing else.
+
 Lesson rules:
 - Write everything in ${languageName(learner.language)}. Calm, warm, respectful tone. No emojis, no exclamation marks.
 - If the learner uses the app in front of a class, phrase things so a teacher can read them aloud to a group.
@@ -611,8 +621,20 @@ export const parseCounter = (text: string, plan: LessonPlan, idea: string): Coun
 };
 
 /** Parses the model's plan and rejects anything the app could not use safely. */
+/** The question is not one Whybox should turn into a lesson; the child gets a kind reason and a nearby question. */
+export class RefusedQuestion extends Error {
+  constructor(
+    readonly reason: string,
+    readonly alternative: string,
+  ) {
+    super('Question refused');
+  }
+}
+
 export const parsePlan = (text: string): LessonPlan => {
-  const plan = extractJson(text) as LessonPlan;
+  const raw = extractJson(text) as LessonPlan & { refused?: boolean; reason?: unknown; alternative?: unknown };
+  if (raw?.refused === true) throw new RefusedQuestion(String(raw.reason ?? '').slice(0, 300), String(raw.alternative ?? '').slice(0, 160));
+  const plan = raw;
   const { simulation } = plan ?? {};
   if (!plan?.title || !plan.hook || !plan.prediction?.options?.length || !plan.steps?.length || !simulation) {
     throw new Error('Incomplete lesson plan');

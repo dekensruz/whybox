@@ -1,6 +1,14 @@
 import type { LessonPlan, LessonRequest } from '../../shared/lesson.js';
 import { handle, json, readBody } from '../../server/http.js';
-import { buildChildReadParts, buildPlanParts, buildReviewParts, parseChildRead, parsePlan, validateLessonRequest } from '../../server/lessonPlan.js';
+import {
+  buildChildReadParts,
+  buildPlanParts,
+  buildReviewParts,
+  parseChildRead,
+  parsePlan,
+  RefusedQuestion,
+  validateLessonRequest,
+} from '../../server/lessonPlan.js';
 import { callModel, MODELS, ModelError } from '../../server/meta.js';
 
 const ATTEMPTS = 2;
@@ -19,6 +27,8 @@ export const POST = handle(async (request) => {
     try {
       draft = parsePlan(text);
     } catch (error) {
+      // A question Whybox should not teach is answered at once, kindly, with a question it can explore instead.
+      if (error instanceof RefusedQuestion) return json({ refused: { reason: error.reason, alternative: error.alternative } });
       console.warn(`Lesson plan attempt ${attempt} rejected: ${(error as Error).message}`);
     }
   }

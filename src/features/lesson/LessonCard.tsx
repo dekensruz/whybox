@@ -28,7 +28,14 @@ export function LessonCard({ lesson, compact = false }: { lesson: Lesson; compac
   const image = useLessonImage(lesson);
   const subjectLabel = useSubjectLabel();
   const subject = lesson.plan?.subject;
-  const state = lesson.status === 'failed' ? t('lessons.failed') : lesson.status !== 'ready' ? t('lessons.preparing') : null;
+  const state =
+    lesson.status === 'failed'
+      ? t('lessons.failed')
+      : lesson.status === 'refused'
+        ? t('lessons.refused')
+        : lesson.status !== 'ready'
+          ? t('lessons.preparing')
+          : null;
   const stars = lesson.outcome?.stars ?? 0;
   const mastery = lesson.outcome ? lessonMastery(lesson) : null;
 
