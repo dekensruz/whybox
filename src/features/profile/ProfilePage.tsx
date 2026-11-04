@@ -5,7 +5,7 @@ import { Page } from '@/components/Page';
 import { Button } from '@/components/ui/Button';
 import { useI18n, type MessageKey } from '@/i18n';
 import { countryName } from './countryName';
-import { INTERESTS, type Level } from './types';
+import { INTERESTS, LEARNING_LANGUAGES, type Level } from './types';
 
 const LEVEL_KEYS: Record<Level, MessageKey> = {
   primary: 'onboarding.level.primary',
@@ -24,10 +24,13 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 export function ProfilePage() {
   const { t, language } = useI18n();
-  const { profile, user, mode, signOut } = useSession();
+  const { profile, user, mode, signOut, updateProfile } = useSession();
   if (!profile) return null;
 
-  const learningLanguage = new Intl.DisplayNames([language], { type: 'language' }).of(profile.learningLanguage) ?? profile.learningLanguage;
+  const languageName = (code: string) => {
+    const name = new Intl.DisplayNames([language], { type: 'language' }).of(code) ?? code;
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
   const interests = profile.interests
     .map((interest) => ((INTERESTS as readonly string[]).includes(interest) ? t(`options.interests.${interest as (typeof INTERESTS)[number]}`) : interest))
     .join(', ');
@@ -41,7 +44,21 @@ export function ProfilePage() {
           <Row label={t('profile.place')}>
             {[profile.city, countryName(profile.country, language)].filter(Boolean).join(', ')}
           </Row>
-          <Row label={t('profile.learningLanguage')}>{learningLanguage.charAt(0).toUpperCase() + learningLanguage.slice(1)}</Row>
+          <Row label={t('profile.learningLanguage')}>
+            {/* The language lessons are written and spoken in, for the next lessons. */}
+            <select
+              value={profile.learningLanguage}
+              onChange={(event) => void updateProfile({ ...profile, learningLanguage: event.target.value })}
+              className="rounded-xl border border-line bg-surface px-3 py-2 font-medium"
+              aria-label={t('profile.learningLanguage')}
+            >
+              {LEARNING_LANGUAGES.map((code) => (
+                <option key={code} value={code}>
+                  {languageName(code)}
+                </option>
+              ))}
+            </select>
+          </Row>
           {interests && <Row label={t('profile.interests')}>{interests}</Row>}
           <Row label={t('profile.interfaceLanguage')}>
             <LanguageSwitch />

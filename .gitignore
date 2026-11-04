@@ -34,3 +34,6 @@ Thumbs.db
 
 # Python caches (modal/)
 __pycache__/
+
+# Demo video work files (script, recordings, edit)
+video/
