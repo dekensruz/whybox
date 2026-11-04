@@ -47,7 +47,7 @@ const isComplete = (step: StepId, draft: Draft): boolean => {
 export function OnboardingPage() {
   const { t, language } = useI18n();
   const navigate = useNavigate();
-  const { updateProfile } = useSession();
+  const { updateProfile, mode, signOut } = useSession();
   const [draft, setDraft] = useState<Draft>(() => initialDraft(language));
   const [index, setIndex] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -76,6 +76,14 @@ export function OnboardingPage() {
     }
   };
 
+  // From the first question, a guest goes back to the landing page: leaving guest mode, or the app would send them here again.
+  const leave = async () => {
+    if (mode === 'guest') {
+      await signOut();
+      navigate('/welcome', { replace: true });
+    } else navigate(-1);
+  };
+
   return (
     <Screen
       header={
@@ -83,7 +91,7 @@ export function OnboardingPage() {
           <div className="flex w-full items-center gap-4">
             <button
               type="button"
-              onClick={() => (index === 0 ? navigate(-1) : setIndex(index - 1))}
+              onClick={() => (index === 0 ? leave() : setIndex(index - 1))}
               className="-ml-2 flex size-10 items-center justify-center rounded-full text-muted hover:text-ink"
               aria-label={t('common.back')}
             >

@@ -8,7 +8,6 @@ export const en: Messages = {
     optional: 'Optional',
   },
   landing: {
-    eyebrow: 'Built in Goma, DR Congo',
     title: 'Any lesson becomes',
     titleAccent: 'an experiment.',
     subtitle: 'Take a photo of a notebook page, type a question or ask it out loud. Whybox turns it into an experiment a child explores with their own hands, with a tutor who explains every step out loud.',
@@ -44,7 +43,8 @@ export const en: Messages = {
     modelSam: 'Measures a real experiment the child films at home.',
     modelOpen: 'Open-weight, on Baseten: reads children’s own answers, so a school can host it itself.',
     closing: 'Every child deserves to understand why.',
-    footer: 'Whybox, by Dekens Ruzuba, Goma. French and English.',
+    footerBefore: 'Whybox, by',
+    footerAfter: ', Goma. French and English.',
   },
   welcome: {
     title: 'Understand how things really work.',
