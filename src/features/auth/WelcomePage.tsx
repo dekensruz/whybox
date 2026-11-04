@@ -8,6 +8,7 @@ import { useI18n, type MessageKey } from '@/i18n';
 
 const VIDEO_ID = '0cZhsouVcNI';
 const REPOSITORY = 'https://github.com/dekensruz/whybox';
+const PORTFOLIO = 'https://portfoliodek.netlify.app/';
 
 const STEPS: Array<[MessageKey, MessageKey]> = [
   ['landing.step1Title', 'landing.step1Text'],
@@ -79,7 +80,6 @@ export function WelcomePage() {
 
       <section className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 pb-16 pt-6 lg:grid-cols-[1fr_1.05fr] lg:px-10 lg:pb-24 lg:pt-12">
         <div className="flex flex-col gap-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-subtle">{t('landing.eyebrow')}</p>
           <h1 className="text-[40px] font-semibold leading-[1.05] tracking-tight text-balance lg:text-[56px]">
             {t('landing.title')} <span className="text-accent">{t('landing.titleAccent')}</span>
           </h1>
@@ -157,7 +157,13 @@ export function WelcomePage() {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-6 py-8 text-sm text-muted sm:flex-row sm:justify-between lg:px-10">
-          <p>{t('landing.footer')}</p>
+          <p>
+            {t('landing.footerBefore')}{' '}
+            <a href={PORTFOLIO} target="_blank" rel="noreferrer" className="font-medium text-ink hover:underline">
+              Dekens Ruzuba
+            </a>
+            {t('landing.footerAfter')}
+          </p>
           <a href={REPOSITORY} className="font-medium text-ink hover:underline">
             GitHub
           </a>

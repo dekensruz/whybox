@@ -6,7 +6,6 @@ export const fr = {
     optional: 'Facultatif',
   },
   landing: {
-    eyebrow: 'Conçu à Goma, RD Congo',
     title: 'Chaque leçon devient',
     titleAccent: 'une expérience.',
     subtitle: 'Photographiez une page de cahier, tapez une question ou posez-la à voix haute. Whybox en fait une expérience que l’enfant explore de ses propres mains, avec une tutrice qui explique chaque étape à voix haute.',
@@ -42,7 +41,8 @@ export const fr = {
     modelSam: 'Mesure une vraie expérience filmée par l’enfant à la maison.',
     modelOpen: 'Open-weight, sur Baseten : lit les réponses des enfants, et une école peut l’héberger elle-même.',
     closing: 'Chaque enfant mérite de comprendre pourquoi.',
-    footer: 'Whybox, par Dekens Ruzuba, Goma. Français et anglais.',
+    footerBefore: 'Whybox, par',
+    footerAfter: ', Goma. Français et anglais.',
   },
   welcome: {
     title: 'Comprendre comment les choses marchent vraiment.',
