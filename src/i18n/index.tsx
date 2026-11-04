@@ -14,10 +14,11 @@ type Path<T> = {
 }[keyof T & string];
 export type MessageKey = Path<Messages>;
 
+/** English unless the visitor chose otherwise with the language switch. */
 const detectLanguage = (): UiLanguage => {
   const saved = readStorage(STORAGE_KEY);
   if (saved === 'fr' || saved === 'en') return saved;
-  return navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  return 'en';
 };
 
 const lookup = (messages: Messages, key: string): string => {
