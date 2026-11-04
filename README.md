@@ -1,47 +1,79 @@
 # Whybox
 
-Whybox is an AI lab that turns any lesson into an interactive simulation that verifies itself before teaching.
+**A lab in every pocket.** Whybox turns any lesson (a photo of a notebook page, a blackboard, a typed or spoken question) into an interactive experiment a child explores with their own hands, with a tutor who explains every step out loud.
 
-A child takes a photo of a notebook page, a blackboard or a textbook, or simply asks a question. Whybox builds an experiment they can play with, showing what is normally invisible: electrons moving through a wire, the force that keeps a canoe afloat, light bending in water. Before the child sees it, an agent tests the simulation against the formulas of the lesson and fixes it if something is wrong.
+Live app: [whybox-app.vercel.app](https://whybox-app.vercel.app)
 
 ## Why
 
-In many schools, especially in Africa, kids learn science, math and technology without a lab and often without a textbook. They memorize formulas without seeing what they mean or how things really work, so many of them lose interest. Whybox gives every lesson a lab, on a single phone, even for a whole group of students.
+In many schools, especially in Africa, children learn science without a textbook and without a lab. They copy the lesson, memorize it, and never see it work. Whybox was built in Goma, in eastern DR Congo, to give every lesson an experiment, on a single phone.
 
-## How it works
+## What a lesson looks like
 
-1. **Read** the lesson from a photo, a typed question or a spoken question.
-2. **Generate** an interactive simulation as a single, offline, self-contained HTML file.
-3. **Verify** it: the agent drives the simulation through a test interface, compares the measured values with the lesson's formulas and checks the rendering visually, then fixes it until it passes.
-4. **Personalize**: the child predicts before observing, and when a misconception shows up, Whybox generates a new experiment targeted at it.
+1. **Ask.** Photograph a notebook page or a blackboard, type a question, or ask it out loud.
+2. **Guess first.** Before seeing anything, the child predicts what will happen, and gets a clear verdict.
+3. **Play to find out.** Every step of the tour is a challenge: the child drags the objects in the scene (the battery, the rope, the Sun) until they find the answer, and wins up to three stars.
+4. **Test a wrong idea.** A wrong prediction gets its own short experiment, built against that idea.
+5. **Name it, practise it.** Key words come after the discovery, illustrated with scenes from the child's daily life, then an exercise on a new situation, answered by typing, choosing or speaking, and corrected kindly.
+6. **Missions.** Extra levels played in the same experiment.
+7. **Do it for real.** For physics lessons, the child films a real experiment at home (a ball that falls, a pendulum) and Whybox measures it and compares it with the lesson.
 
-## Built with Meta models
+Throughout, a **3D tutor** reads every card aloud with a natural voice, gestures and celebrates, and can be turned off.
 
-| Task | Model |
-| --- | --- |
-| Reading lessons and generating simulations | Muse Spark |
-| Visual verification of the simulations | Muse Wonder |
-| Isolating diagrams and tracking objects in real experiments | SAM 3.1 |
-| Spoken questions | Muse Voice Transcribe |
-| Local illustrations | Muse Image |
+## Made for each child
 
-## Project status
+- Lessons adapt to the learner's level, country, interests and the subjects they find hard.
+- A learner memory keeps recent lessons and wrong ideas, and makes the next lessons simpler or deeper.
+- The dashboard suggests what to learn next: lessons to review, to go further, and to discover.
+- Progress: points and levels, days in a row, stars, mastery per subject, and badges.
+- Two kinds of experiments: **quantities** (science, math, technology) and **situations** (speaking in public, everyday life), where people in the scene react to the child's choices, with no invented numbers.
+- Lessons in French and in English for now; the interface in both languages.
+- Safety: medical, war or political questions are kindly refused, with a nearby question the child can explore instead.
 
-Built during the Meta Global AI Developer Hackathon (October 26 to November 4, 2026). Work in progress.
+## A team of agents behind every lesson
+
+| Agent | Model | Job |
+| --- | --- | --- |
+| Planner | Muse Spark | Reads the notebook photo or the question and plans the lesson, the challenges and the exercise |
+| Young reader | Muse Spark | Reads the lesson as a 10-year-old and flags every sentence a child would not understand |
+| Editor | Muse Spark | Rewrites the lesson from those notes and checks the science |
+| Builder | Muse Wonder | Builds the interactive experiment with the Whybox scene kit (2D or 3D) |
+| Verifier | (code) | Drives the experiment and checks every measurement against the lesson's formulas |
+| Visual reviewer | Muse Wonder | Looks at pictures of each step, rejects unclear scenes and triggers a repair |
+| Illustrator | Muse Image | Draws the opening question, each key word, the exercise and the summary |
+| Tutor | Muse Spark + Kokoro | Writes what the tutor says on each card, spoken with an open-weight voice |
+| Listener | Muse Voice Transcribe | Turns spoken questions and answers into text |
+| Real-experiment analyst | SAM 3.1 + Muse Spark | Tracks the object in the child's video, measures its motion and compares it with the lesson |
+| Answer reader | Muse Spark Open (Baseten) | Reads the child's written answers and wrong ideas |
+| Guide | Muse Spark | Suggests the next questions to explore, from the learner's profile and progress |
+
+**Open-weight by design.** The most personal data a child gives (their own answers and their wrong ideas) is read by Muse Spark Open, an open-weight model served on Baseten, that a school or a country can host on its own servers. If it is unavailable, Muse Spark takes over so the child always gets an answer.
+
+## Stack
+
+- React 19, TypeScript, Vite, Tailwind CSS, three.js
+- Serverless API routes on Vercel (`api/`), shared types in `shared/`
+- Supabase for accounts, profiles and real-experiment videos (deleted after analysis)
+- The scene kit (`src/features/lesson/runtime/kit`): controls, measurements, people, places, pictograms and drag handles, injected into every generated experiment, which runs sandboxed
+- The tutor's voice: Kokoro on Modal (`modal/tts.py`), with the device's voice as fallback
 
 ## Getting started
 
-Requirements: Node.js 20 or later and a Meta Model API key.
+Requirements: Node.js 20 or later, a Meta Model API key, and a Supabase project.
 
 ```bash
+npm install
 cp .env.example .env
+npm run dev
 ```
 
-Set `MODEL_API_KEY` in `.env`, then run the generation spike:
+Fill in `.env` (see `.env.example`): `MODEL_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and optionally `BASETEN_API_KEY` (Muse Spark Open), `TTS_URL` and `TTS_TOKEN` (tutor voice). Run the SQL files in `supabase/migrations` on your Supabase project.
 
-```bash
-npm run spike:generate -- --lesson "Electric current in a simple circuit"
-```
+To deploy the tutor voice: `python -m modal deploy modal/tts.py` (reads `TTS_TOKEN` from `.env`).
+
+## Built for
+
+The Meta Global AI Developer Hackathon, October 26 to November 4, 2026, by Dekens Ruzuba (Goma, DR Congo).
 
 ## License
 
