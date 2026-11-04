@@ -393,6 +393,8 @@ export function createRenderer2d(options) {
       now = seconds;
       options.draw(g, values, measurements, seconds);
       drawLabels(context, labels, obstacles, cssWidth, cssHeight);
+      // Where the handles are, in canvas pixels, for automated tests and demo recordings.
+      window.whyboxHandles = handles.map(({ name, ax, ay, bx, by, hx, hy, min, max }) => ({ name, ax, ay, bx, by, hx, hy, min, max }));
     },
   };
 }
